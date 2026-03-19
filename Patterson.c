@@ -22,7 +22,10 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <execinfo.h>
+#include <omp.h>
 
+// #include "8192.h"
+// #include "4096.h"
 #include "global.h"
 #include "struct.h"
 #include "debug.c"
@@ -46,7 +49,7 @@ extern void makeS();
 unsigned short sy[K] = {0};
 
 // Goppa多項式
-static unsigned short g[K + 1] = {1, 0, 1, 0, 1, 1, 1,0,0,0,1,1};
+static unsigned short g[K + 1] = {1, 0, 0, 0, 1, 0, 1};
 //{1,0,1,1};
 static MTX BB = {0};
 static MTX H = {0};
@@ -56,6 +59,20 @@ unsigned int AA = 0, B = 0; //, C = 0, A2 = 0;
 // 有限体の元の逆数
 unsigned short
 oinv(unsigned short a)
+{
+  if (a == 0)
+    return -1;
+
+  return (N - fg[a]) % (N-1) + 1;
+
+  printf("no return \n");
+
+  exit(1);
+}
+
+// 有限体の元の逆数
+unsigned short
+oinv2(unsigned short a)
 {
   int i;
 
@@ -69,7 +86,7 @@ oinv(unsigned short a)
   }
 
   printf("no return \n");
-  //  exit (1);
+  exit (1);
 }
 
 // aに何をかけたらbになるか
@@ -172,6 +189,47 @@ int terms(OP f)
 
   return count;
 }
+
+
+// 多項式の次数(default)
+int deg(vec a)
+{
+  int i, n = 0, flg = 0;
+
+  // #pragma omp parallel for
+  for (i = 0; i < DEG; i++)
+  {
+    if (a.x[i] > 0)
+    {
+      n = i;
+      flg = 1;
+    }
+  }
+  if (flg == 0)
+    return 0;
+
+  return n;
+}
+
+
+// 多項式の次数(degのOP型)
+int odeg(OP f)
+{
+  int i, j = 0, k;
+
+  if (f.t[0].a == 0)
+    return 0;
+
+  // k=terms(f);
+  for (i = 0; i < DEG; i++)
+  {
+    if (j < f.t[i].n && f.t[i].a > 0)
+      j = f.t[i].n;
+  }
+
+  return j;
+}
+
 
 // 多項式を表示する（OP型）
 void oprintpol(OP f)
@@ -1331,24 +1389,6 @@ int distance(OP f)
   return j;
 }
 
-// 多項式の次数(degのOP型)
-int odeg(OP f)
-{
-  int i, j = 0, k;
-
-  if (f.t[0].a == 0)
-    return 0;
-
-  // k=terms(f);
-  for (i = 0; i < DEG; i++)
-  {
-    if (j < f.t[i].n && f.t[i].a > 0)
-      j = f.t[i].n;
-  }
-
-  return j;
-}
-
 // ０多項式かどうかのチェック
 unsigned char
 chk(OP f)
@@ -1587,25 +1627,6 @@ b2B(unsigned short b[E])
   return a;
 }
 
-// 多項式の次数(default)
-int deg(vec a)
-{
-  int i, n = 0, flg = 0;
-
-  // #pragma omp parallel for
-  for (i = 0; i < DEG; i++)
-  {
-    if (a.x[i] > 0)
-    {
-      n = i;
-      flg = 1;
-    }
-  }
-  if (flg == 0)
-    return 0;
-
-  return n;
-}
 
 // 整数からベクトル型への変換
 vec i2v(unsigned short n)
@@ -1887,6 +1908,112 @@ int oequ(OP f, OP g)
 
 // GF(2^m) then set m in this function.
 int ben_or(OP f)
+{
+  int i, n, flg = 0;
+  OP s = {0}, u = {0}, r = {0},d={0};
+  vec v = {0}, x = {0};
+  // if GF(8192) is 2^m and m==13 or if GF(4096) and m==12 if GF(16384) is testing
+  int m = E;
+  // m=12 as a for GF(4096)=2^12 defined @ gloal.h or here,for example m=4 and GF(16)
+
+  v.x[1] = 1;
+  s = v2o(v);
+  r = s;
+  n = deg(o2v(f));
+
+  if (n == 0)
+    return -1;
+
+  i = 1;
+
+  // r(x)^{q^i} square pow mod
+  // omp_set_num_threads(omp_get_max_threads());
+  OP t[K]={0};
+    #pragma omp parallel num_threads(omp_get_max_threads()) //num_threads(TH)
+    {
+      // #pragma omp parallel for
+      #pragma omp for schedule(static)
+      for (i = 0; i < n/2+1; i++)
+      {
+        t[i] = bib(i, d);
+      }
+    }
+/*  
+  if (E % 2 == 1)
+  {
+//#pragma omp parallel num_threads(8) // omp_get_max_threads()) //num_threads(TH)
+    {
+      // #pragma omp parallel for
+//#pragma omp for schedule(static)
+      for (i = 0; i < n / 2 + 1; i++)
+      {
+        printf("i=%d\n", i);
+
+        flg = 1;
+        // irreducible over GH(8192) 2^13
+        r = opowmod(r, f, m);
+
+        // irreducible over GF2
+        // r=omod(opow(r,2),f);
+
+        u = oadd(r, s);
+        if (deg(o2v(u)) == 0 && LT(u).a == 0)
+          exit(1); // return -1;
+        if (deg(o2v(u)) == 0 && LT(u).a == 1)
+        {
+          // i++;
+          flg = 0;
+        }
+        if (deg(o2v(u)) > 0)
+          u = gcd(f, u);
+
+        if (deg(o2v(u)) > 0)
+          exit(1); // return -1;
+
+        // if (flg == 1)
+        //   i++;
+      }
+    }
+  }
+  else
+  {
+    for (i = 0; i < n / 2 + 1; i++)
+    {
+      printf("i=%d\n", i);
+
+      flg = 1;
+      // irreducible over GH(8192) 2^13
+      r = opowmod(r, f, m);
+
+      // irreducible over GF2
+      // r=omod(opow(r,2),f);
+
+      u = oadd(r, s);
+      if (deg(o2v(u)) == 0 && LT(u).a == 0)
+        return -1;
+      if (deg(o2v(u)) == 0 && LT(u).a == 1)
+      {
+        // i++;
+        flg = 0;
+      }
+      if (deg(o2v(u)) > 0)
+        u = gcd(f, u);
+
+      if (deg(o2v(u)) > 0)
+        return -1;
+
+      // if (flg == 1)
+      //   i++;
+    }
+  }
+  */
+
+  return 0;
+}
+
+
+// GF(2^m) then set m in this function.
+int ben_her(OP f)
 {
   int i, n, flg = 0;
   OP s = {0}, u = {0}, r = {0};
@@ -2269,15 +2396,17 @@ void toByte(MTX SH)
 
   for (i = 0; i < N; i++)
   {
-    printf("戸田の定理 %d\n", i);
+    printf("数え上げ %d\n", i);
     // #pragma omp parallel for
     for (j = 0; j < K; j++)
     {
-      cnt = 0;
-      for (k = j * E; k < j * E + E; k++)
-        v.x[cnt++] = SH.x[i][k];
-
-      HH[i][j] = v2i(v);
+    unsigned short x=0;
+        k = j * E;
+        x=0;
+        for (int l = 0; l < E; l++){
+          x ^= (SH.x[i][k + l]<<l);
+          }
+        HH[i][j] = x;//v2i(v);
       // printf("%d,", HH[i][j]);
       //= BH[j][i];
     }
@@ -2294,15 +2423,15 @@ void Pgen()
   unsigned int i, j;
   FILE *fp;
 
-  fp = fopen("P.key", "wb");
+  //fp = fopen("P.key", "wb");
   for (i = 0; i < N; i++)
     P[i] = i;
   random_shuffle(P, SIZE_OF_ARRAY(P));
   //  random_permutation(P);
   for (i = 0; i < N; i++)
     inv_P[P[i]] = i;
-  fwrite(P, 2, N, fp);
-  fclose(fp);
+  //fwrite(P, 2, N, fp);
+  //fclose(fp);
 
   // for (i = 0; i < N; i++)
   // printf ("%d,", inv_P[i]);
@@ -3085,36 +3214,25 @@ void van()
   // #pragma omp parallel for private(i, j)
   for (i = 1; i < K; i++)
   {
-    for (j = 0; j < N; j++){
+    for (j = 0; j < N; j++)
       vb[i][j] = gf[mltn(i, fg[j])];
-    printf("%d,",vb[i][j]);
-    }
-    printf("\n");
   }
-  printf("\n");
 }
 
-void ogt()
+void ogt(unsigned short g[K+1])
 {
   int i, j, k;
   OP w = {0};
   unsigned short abc[N][K] = {0};
-  for(i=0;i<K;i++)
-  printf("%d,",g[i]);
-  printf("\n");
-  //exit(1);
 
   // #pragma omp parallel for private(i, j)
   for (i = 0; i < K; i++)
   {
-    for (j = 0; j < K - i; j++){
+    for (j = 0; j < K - i; j++)
       gt[i][j + i] = g[j];
-      printf("%d,",gt[i][i+j]);
-    }
-    printf("\n");
   }
-  printf("\n");
 }
+
 
 void van2()
 {
@@ -3349,6 +3467,64 @@ void GF_mul(unsigned short *out, unsigned short *in0, unsigned short *in1)
       prod[i - K + 1] ^= prod[i];
       prod[i - K + 0] ^= prod[i];
     }
+             if (K == 96)
+      {
+        prod[i - K + 63] ^= prod[i];
+        prod[i - K + 61] ^= prod[i];
+        prod[i - K + 60] ^= prod[i];
+        prod[i - K + 59] ^= prod[i];
+        prod[i - K + 54] ^= prod[i];
+        prod[i - K + 50] ^= prod[i];
+        prod[i - K + 46] ^= prod[i];
+        prod[i - K + 44] ^= prod[i];
+        prod[i - K + 40] ^= prod[i];
+        prod[i - K + 37] ^= prod[i];
+        prod[i - K + 33] ^= prod[i];
+        prod[i - K + 32] ^= prod[i];
+        prod[i - K + 28] ^= prod[i];
+        prod[i - K + 24] ^= prod[i];
+        prod[i - K + 23] ^= prod[i];
+        prod[i - K + 21] ^= prod[i];
+        prod[i - K + 20] ^= prod[i];
+        prod[i - K + 19] ^= prod[i];
+        prod[i - K + 18] ^= prod[i];
+        prod[i - K + 16] ^= prod[i];
+        prod[i - K + 15] ^= prod[i];
+        prod[i - K + 14] ^= prod[i];
+        prod[i - K + 13] ^= prod[i];
+        prod[i - K + 11] ^= prod[i];
+        prod[i - K + 9] ^= prod[i];
+        prod[i - K + 8] ^= prod[i];
+        prod[i - K + 7] ^= prod[i];
+        prod[i - K + 6] ^= prod[i];
+        prod[i - K + 4] ^= prod[i];
+        prod[i - K + 3] ^= prod[i];
+        prod[i - K + 2] ^= prod[i];
+        prod[i - K + 0] ^= prod[i];
+      }
+      if (K == 64)
+      {
+        prod[i - K + 33] ^= prod[i];
+        prod[i - K + 30] ^= prod[i];
+        prod[i - K + 26] ^= prod[i];
+        prod[i - K + 25] ^= prod[i];
+        prod[i - K + 24] ^= prod[i];
+        prod[i - K + 23] ^= prod[i];
+        prod[i - K + 22] ^= prod[i];
+        prod[i - K + 21] ^= prod[i];
+        prod[i - K + 20] ^= prod[i];
+        prod[i - K + 18] ^= prod[i];
+        prod[i - K + 13] ^= prod[i];
+        prod[i - K + 12] ^= prod[i];
+        prod[i - K + 11] ^= prod[i];
+        prod[i - K + 10] ^= prod[i];
+        prod[i - K + 7] ^= prod[i];
+        prod[i - K + 5] ^= prod[i];
+        prod[i - K + 4] ^= prod[i];
+        prod[i - K + 2] ^= prod[i];
+        prod[i - K + 1] ^= prod[i];
+        prod[i - K + 0] ^= prod[i];
+      }
     if (K == 32)
     {
       // 32
@@ -3586,8 +3762,7 @@ aa:
   l = -1;
   vec pp = {0}, tt = {0};
 
-  /*
-  //既約にしたい場合はここを有効にする
+  
           while (l < 0)
           {
               for (i = 0; i < K; i++)
@@ -3600,14 +3775,49 @@ aa:
                   printf("\n");
                   printsage(tt);
                   printf(" ==irr\n");
-                  // exit(1);
+                 //exit(1);
               }
           }
-  //w = setpol(tt.x,K+1);
-*/
+          //w = v2o(tt);
   
+ /*
+  l = -1;
+  while (l == -1)
+  {
+    w = mkpol();
+    l = ben_or(w);
+    printf("irr=%d\n", l);
+    if (ii > 300)
+    {
+      printf("too many tryal\n");
+      exit(1);
+    }
+    printf("ben=%d\n", ii);
+    ii++;
+    //
+  }
+*/
   // w = mkpol();
   
+  w = setpol(tt.x,K+1);
+
+  // 多項式の値が0でないことを確認
+  for (i = 0; i < N; i++)
+  {
+    ta[i] = trace(w, i);
+    if (ta[i] == 0)
+    {
+      printf("trace 0 @ %d\n", i);
+      // fail = 1;
+      goto aa;
+      //exit(1);
+    }
+  }
+  for (i = 0; i < N; i++)
+  {
+    tr[i] = oinv(ta[i]);
+    // printf("%d,", tr[i]);
+  }
 
   printpol(o2v(w));
   printf(" =irreducible\n");
@@ -3617,18 +3827,12 @@ aa:
   // if(j>100)
   // exit(1);
 
-
-
   // 多項式を固定したい場合コメントアウトする。
-  int fail=0;
+  /*
   memset(ta, 0, sizeof(ta));
   w = setpol(g, K + 1);
-  
-  //w=mkpol();
   printpol(o2v(w));
   //printf(" =poly\n");
-
-  // 多項式の値が0でないことを確認
   for (i = 0; i < N; i++)
   {    ta[i] = trace(w, i);
     if (ta[i] == 0)
@@ -3637,27 +3841,18 @@ aa:
       fail = 1;
       break;
     }
-    if(fail==1)
-    exit(1);
-  }
-  for (i = 0; i < N; i++)
-  {
-    tr[i] = oinv(ta[i]);
-    // printf("%d,", tr[i]);
   }
   oprintpol(w);
   printf("\n");
   printsage(o2v(w));
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
-  //exit(1);
-  
+  */
+
   van();
-  //exit(1);
   //for(int i=0;i<K;i++)
   //g[i]=tt.x[i];
-  ogt();
-  //exit(1);
+  ogt(tt.x);
   memset(mat, 0, sizeof(mat));
 
   // wait();
@@ -3673,13 +3868,9 @@ aa:
     for (i = 0; i < K; i++)
     {
       ma[j][i] = gf[mlt(fg[vb[i][j]], tr[j])];
-      printf("%d,",ma[i][j]);
     }
-    printf("tr= %d\n",tr[j]);
     // printf("tr[%d]=%d\n",j,tr[j]);
   }
-  printf("\n");
-  //exit(1);
 
   unsigned short s;
   // #pragma omp parallel for default(none) private(i, j, k, s) shared(mat, gt, ma, gf, fg)
@@ -3695,8 +3886,8 @@ aa:
       mat[j][i] = s;
     }
   }
-   printf("\n");
-   //exit(1);
+  // printf("\n");
+  // exit(1);
 
   for (j = 0; j < N; j++)
   {
@@ -3822,9 +4013,9 @@ OP pubkeygen()
   printf(" ==goppa polynomial\n");
 
   v = o2v(w);
-  fp = fopen("sk.key", "wb");
-  fwrite(g, 2, K + 1, fp);
-  fclose(fp);
+  //fp = fopen("sk.key", "wb");
+  //fwrite(g, 2, K + 1, fp);
+  //fclose(fp);
   oprintpol(w);
   printf("\n");
   printsage(o2v(w));
@@ -3845,12 +4036,13 @@ OP pubkeygen()
     memset(Q.x, 0, sizeof(Q.x));
     memset(O.x, 0, sizeof(O.x));
     memset(S.x, 0, sizeof(S.x));
+  
     for (i = 0; i < (K)*E; i++)
     {
       for (j = 0; j < (K)*E; j++)
         S.x[i][j] = xor128() % 2;
     }
-  } while (is_reg(S, inv_S.x) == -1);
+  } while (is_reg(S, &inv_S) == -1);
 
   /*
     fp = fopen("inv_S.key", "wb");
@@ -4246,7 +4438,8 @@ int ero2(vec v)
       */
     printf("へげえええーっ\n");
     // exit(1);
-    exit(1);
+    return -1;
+    //exit(1);
   }
 
   return count;
@@ -4533,34 +4726,43 @@ int main(void)
   // Berlekamp-Massey法（UnderConstruction）
   // bms(s);
   // exit(1);
+  // g=4x^4+1x^2+8x^1+1x^0, e={3,4,9,11} <- bug finder
 
   int j = 0;
 
   // chu();
-  w = mkg();
-  //w = setpol(g,K+1);
-    printpol(o2v(w));
-    //exit(1);
-  
-    // 公開鍵を生成する
-   //w = pubkeygen();
+  //w = mkg();
+  for(int i=0;i<N;i++)
+  printf("%d %d\n",oinv(i),oinv2(i));
+  //exit(1);
 
+  // 公開鍵を生成する
+  w = pubkeygen();
+  // op will extention
+  /*
+  printsage(o2v(w));
+  printf(" sage\n");
+  printpol(o2v(w));
+  printf("\n");
+  exit(1);
+  */
+  
   while (1)
   {
 
     // エラーベクトルを生成する
     memset(z1, 0, sizeof(z1));
-    //mkerr(z1, T * 2);
-    for(int i=0;i<K;i++)
-    z1[i]=1;
-
+    mkerr(z1, K);
+    //for(int i=0;i<K;i++)
+    //z1[i]=1;
+/*
     f = synd(z1);
     v = patterson(w, f);
     ero(v);
     exit(1);
-
+*/
     // encryotion
-    test(w, z1);
+    //test(w, z1);
     //wait();
 
     // シンドロームを計算する
@@ -4572,7 +4774,11 @@ int main(void)
     v = patterson(w, f);
 
     // エラー表示
-    ero2(v);
+    if(ero2(v)<0){
+    for(int i=0;i<N;i++)
+    if(z1[i]>0)
+    printf("i=%d\n",i);
+    }
 
     break;
   }

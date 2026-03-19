@@ -7,7 +7,7 @@
 //を表す。ここではDは符号長にしている。
 #define N 256 // 符号長
 #define M N //有限体の元の数
-#define K (11) //符号の次元
+#define K (32) //符号の次元
 #define E (8)    //拡大体のビット数
 #define DEG K*E //(K * E)
 #define T (K/2) //エラーの数
