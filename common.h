@@ -45,6 +45,7 @@ OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
 
 int is_reg(const MTX *cc, MTX *R, RNG *rng);
+void random_full_rank_binary_matrix(MTX *matrix, RNG *rng);
 int mkS(const MTX *cc, MTX *R);
 int mkRS(const MTX *cc, MTX *R);
 int binv(const MTX *cc, MTX *L, int Y);

@@ -24,10 +24,58 @@ int main(void)
   OP noncanonical = {0};
   unsigned short xor16[67], xor16_expected[67], xor16_mod2[67], xor16_mod2_expected[67];
   uint8_t xor8[67], xor8_expected[67];
+  MTX full_rank_matrix = {0};
+  unsigned short rank_rows[DEG][DEG] = {0};
+  RNG rng = {123456789, 362436069, 521288629, 88675123};
   OP f, h;
   int failed = 0;
 
   gen_gf(E, N, 1);
+  random_full_rank_binary_matrix(&full_rank_matrix, &rng);
+
+  for (int i = 0; i < DEG; i++)
+  {
+    for (int j = 0; j < DEG; j++)
+    {
+      if (full_rank_matrix.x[i][j] > 1)
+      {
+        fprintf(stderr, "generated matrix contains a non-binary value\n");
+        failed = 1;
+      }
+      rank_rows[i][j] = full_rank_matrix.x[i][j];
+    }
+  }
+
+  int rank = 0;
+  for (int col = 0; col < DEG; col++)
+  {
+    int pivot = rank;
+    while (pivot < DEG && rank_rows[pivot][col] == 0)
+      pivot++;
+    if (pivot == DEG)
+      continue;
+
+    for (int j = 0; j < DEG; j++)
+    {
+      unsigned short tmp = rank_rows[rank][j];
+      rank_rows[rank][j] = rank_rows[pivot][j];
+      rank_rows[pivot][j] = tmp;
+    }
+    for (int row = rank + 1; row < DEG; row++)
+    {
+      if (rank_rows[row][col] == 1)
+      {
+        for (int j = col; j < DEG; j++)
+          rank_rows[row][j] ^= rank_rows[rank][j];
+      }
+    }
+    rank++;
+  }
+  if (rank != DEG)
+  {
+    fprintf(stderr, "generated binary matrix rank: expected %d, got %d\n", DEG, rank);
+    failed = 1;
+  }
 
   for (int i = 0; i < 67; i++)
   {

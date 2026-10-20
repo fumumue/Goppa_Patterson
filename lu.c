@@ -12,6 +12,43 @@
 
 extern void makeS();
 
+void random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
+{
+  // Keep an incremental row-echelon basis so dependent candidates can be discarded.
+  unsigned char basis[F][F] = {0};
+  bool has_pivot[F] = {false};
+  unsigned char candidate[F];
+  int accepted = 0;
+
+  memset(matrix->x, 0, sizeof(matrix->x));
+  while (accepted < F)
+  {
+    for (int col = 0; col < F; col++)
+    {
+      candidate[col] = (unsigned char)(xor128(rng) & 1UL);
+      matrix->x[accepted][col] = candidate[col];
+    }
+
+    for (int pivot = 0; pivot < F; pivot++)
+    {
+      if (candidate[pivot] == 0)
+        continue;
+
+      if (has_pivot[pivot])
+      {
+        for (int col = pivot; col < F; col++)
+          candidate[col] ^= basis[pivot][col];
+        continue;
+      }
+
+      memcpy(basis[pivot], candidate, sizeof(candidate));
+      has_pivot[pivot] = true;
+      accepted++;
+      break;
+    }
+  }
+}
+
 int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
 {
   MTX cc = *cc_input;

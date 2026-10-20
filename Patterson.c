@@ -2047,16 +2047,12 @@ vec pubkeygen(unsigned short permutation[N],
   Pgen(permutation);
   fp = fopen("P.key", "w");
   fclose(fp);
-  do
+  random_full_rank_binary_matrix(&scrambler, rng);
+  if (is_reg(&scrambler, inverse_scrambler, rng) != 0)
   {
-    memset(scrambler.x, 0, sizeof(scrambler.x));
-  
-    for (i = 0; i < (K)*E; i++)
-    {
-      for (j = 0; j < (K)*E; j++)
-        scrambler.x[i][j] = xor128(rng) % 2;
-    }
-  } while (is_reg(&scrambler, inverse_scrambler, rng) == -1);
+    fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
+    exit(EXIT_FAILURE);
+  }
 
   /*
     fp = fopen("inv_S.key", "wb");
