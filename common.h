@@ -26,6 +26,7 @@ void print_trace(void);
 
 vec o2v(OP f);
 OP v2o(vec a);
+OP conv(OP f);
 void Pgen(unsigned short permutation[N]);
 vec pubkeygen(unsigned short permutation[N],
               MTX *inverse_scrambler,

@@ -106,6 +106,29 @@ void wait(void)
 // OP型を正規化する
 OP conv(OP f)
 {
+  int i;
+  int previous_degree = -1;
+  bool has_ended = false;
+
+  for (i = 0; i < DEG; i++)
+  {
+    if (f.t[i].a == 0)
+    {
+      has_ended = true;
+      if (f.t[i].n != 0)
+        break;
+      continue;
+    }
+
+    if (has_ended || f.t[i].n >= DEG || f.t[i].n <= previous_degree)
+      break;
+
+    previous_degree = f.t[i].n;
+  }
+
+  if (i == DEG)
+    return f;
+
   vec v = {0};
   OP g = {0};
 
@@ -305,27 +328,21 @@ vec fmul(vec a, vec b)
 // 多項式の足し算
 OP oadd(OP f, OP g)
 {
-  f = conv(f);
-  g = conv(g);
-  assert(op_verify(f));
-  assert(op_verify(g));
+  vec a = {0}, b = {0};
+  OP h;
 
-  vec a = {0}, b = {0}, c = {0};
-  int i, j, k, l = 0;
-  OP h = {0}, f2 = {0}, g2 = {0};
-
-  a = o2v(f);
-  b = o2v(g);
-
-  // k=deg(o2v(f));
-  // l=deg(o2v(g));
-
-  for (i = 0; i < DEG; i++)
+  for (int i = 0; i < DEG; i++)
   {
-    c.x[i] = a.x[i] ^ b.x[i];
+    if (f.t[i].a > 0 && f.t[i].n < DEG)
+      a.x[f.t[i].n] = f.t[i].a;
+    if (g.t[i].a > 0 && g.t[i].n < DEG)
+      b.x[g.t[i].n] = g.t[i].a;
   }
-  h = v2o(c);
-  // h=conv(h);
+
+  for (int i = 0; i < DEG; i++)
+    a.x[i] ^= b.x[i];
+
+  h = v2o(a);
   assert(op_verify(h));
   return h;
 }

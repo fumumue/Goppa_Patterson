@@ -21,6 +21,7 @@ int main(void)
 {
   vec a = {0}, b = {0}, expected = {0}, expected_product = {0};
   vec expected_vector_product = {0};
+  OP noncanonical = {0};
   unsigned short xor16[67], xor16_expected[67], xor16_mod2[67], xor16_mod2_expected[67];
   uint8_t xor8[67], xor8_expected[67];
   OP f, h;
@@ -92,6 +93,42 @@ int main(void)
   expected_vector_product.x[1] = 1;
   expected_vector_product.x[2] = 2;
   expected_vector_product.x[3] = 28;
+
+  noncanonical.t[0] = (oterm){2, 5};
+  noncanonical.t[1] = (oterm){0, 7};
+  noncanonical.t[2] = (oterm){2, 9};
+  noncanonical.t[4] = (oterm){3, 1};
+  OP other_noncanonical = {0};
+  other_noncanonical.t[0] = (oterm){1, 4};
+  other_noncanonical.t[2] = (oterm){2, 3};
+  other_noncanonical.t[3] = (oterm){0, 6};
+  failed |= expect_vec("conv", o2v(conv(noncanonical)), (unsigned short[DEG]){
+      [0] = 7, [2] = 9, [3] = 1});
+  failed |= expect_vec("conv canonical", o2v(conv(v2o(a))), a.x);
+  failed |= expect_vec("oadd noncanonical",
+                       o2v(oadd(noncanonical, other_noncanonical)),
+                       (unsigned short[DEG]){[0] = 1, [1] = 4, [2] = 10, [3] = 1});
+
+  for (int sample = 0; sample < 32; sample++)
+  {
+    OP left = {0}, right = {0};
+    vec expected_sum = {0};
+
+    for (int i = 0; i < DEG; i++)
+    {
+      left.t[i].n = (unsigned short)((i * 37 + sample * 11) % (DEG + 8));
+      left.t[i].a = (unsigned short)((i * 13 + sample) % M);
+      right.t[i].n = (unsigned short)((i * 19 + sample * 23) % (DEG + 8));
+      right.t[i].a = (unsigned short)((i * 7 + sample * 3) % M);
+    }
+
+    expected_sum = o2v(conv(left));
+    vec right_sum = o2v(conv(right));
+    for (int i = 0; i < DEG; i++)
+      expected_sum.x[i] ^= right_sum.x[i];
+
+    failed |= expect_vec("oadd normalized", o2v(oadd(left, right)), expected_sum.x);
+  }
 
   failed |= expect_vec("vadd", vadd(a, b), expected.x);
   failed |= expect_vec("oadd", o2v(oadd(v2o(a), v2o(b))), expected.x);
