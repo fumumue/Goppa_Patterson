@@ -1,9 +1,6 @@
 #include "common.h"
 
-OP pubkeygen(void);
 void mkerr(unsigned short *z1, int num);
-OP zin(unsigned short zz[]);
-vec patterson(OP w, OP f);
 int ero2(vec v);
 unsigned short oinv(unsigned short a);
 unsigned short oinv2(unsigned short a);
@@ -11,8 +8,7 @@ unsigned short oinv2(unsigned short a);
 int main(void)
 {
   unsigned short z1[N] = {0}; //{1,0,1,1,1,0,0,0,0,0,1,1,1,0,0,1};
-  OP f = {0}, w = {0};
-  vec v;
+  vec f = {0}, w = {0}, v = {0};
 
   srand(clock());
   if (K > N)
@@ -33,7 +29,7 @@ int main(void)
     mkerr(z1, K);
 
     f = zin(z1);
-    printpol(o2v(f));
+    printpol(f);
     printf(" ==syndrome\n");
 
     v = patterson(w, f);

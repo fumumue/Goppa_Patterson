@@ -21,10 +21,53 @@ int main(void)
 {
   vec a = {0}, b = {0}, expected = {0}, expected_product = {0};
   vec expected_vector_product = {0};
+  unsigned short xor16[67], xor16_expected[67], xor16_mod2[67], xor16_mod2_expected[67];
+  uint8_t xor8[67], xor8_expected[67];
   OP f, h;
   int failed = 0;
 
   gen_gf(E, N, 1);
+
+  for (int i = 0; i < 67; i++)
+  {
+    xor16[i] = xor16_expected[i] = (unsigned short)(i * 13);
+    xor16_mod2[i] = xor16_mod2_expected[i] = (unsigned short)(i * 7);
+    xor8[i] = xor8_expected[i] = (uint8_t)(i * 11);
+  }
+
+  for (int i = 0; i < 67; i++)
+  {
+    xor16_expected[i] ^= (unsigned short)(i * 5);
+    xor16_mod2_expected[i] ^= (unsigned short)((i * 9) % 2);
+    xor8_expected[i] ^= (uint8_t)(i * 3);
+  }
+
+  {
+    unsigned short xor16_src[67], xor16_mod2_src[67];
+    uint8_t xor8_src[67];
+
+    for (int i = 0; i < 67; i++)
+    {
+      xor16_src[i] = (unsigned short)(i * 5);
+      xor16_mod2_src[i] = (unsigned short)(i * 9);
+      xor8_src[i] = (uint8_t)(i * 3);
+    }
+    xor_u16(xor16, xor16_src, 67);
+    xor_u16_mod2(xor16_mod2, xor16_mod2_src, 67);
+    xor_u8(xor8, xor8_src, 67);
+  }
+
+  for (int i = 0; i < 67; i++)
+  {
+    if (xor16[i] != xor16_expected[i] ||
+        xor16_mod2[i] != xor16_mod2_expected[i] ||
+        xor8[i] != xor8_expected[i])
+    {
+      fprintf(stderr, "SIMD XOR mismatch at index %d\n", i);
+      failed = 1;
+      break;
+    }
+  }
 
   a.x[0] = 1;
   a.x[1] = 2;

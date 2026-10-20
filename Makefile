@@ -21,7 +21,7 @@ all: $(TARGET)
 $(BUILD_DIR):
 	mkdir -p $@
 
-$(BUILD_DIR)/%.o: %.c common.h global.h struct.h | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.c common.h global.h struct.h simd.h | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(OPENMP_FLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/sha3.o: sha3.h
@@ -29,7 +29,7 @@ $(BUILD_DIR)/sha3.o: sha3.h
 $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OPENMP_FLAGS) $^ $(LDLIBS) -o $@
 
-$(BUILD_DIR)/pointer-equivalence.o: tests/pointer_equivalence.c common.h global.h struct.h | $(BUILD_DIR)
+$(BUILD_DIR)/pointer-equivalence.o: tests/pointer_equivalence.c common.h global.h struct.h simd.h | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(OPENMP_FLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(TEST_TARGET): $(BUILD_DIR)/pointer-equivalence.o $(TEST_OBJECTS)

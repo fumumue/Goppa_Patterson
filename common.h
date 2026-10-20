@@ -13,6 +13,7 @@
 
 #include "global.h"
 #include "struct.h"
+#include "simd.h"
 
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof((array)[0]))
 
@@ -25,6 +26,9 @@ void print_trace(void);
 
 vec o2v(OP f);
 OP v2o(vec a);
+vec pubkeygen(void);
+vec zin(unsigned short zz[]);
+vec patterson(vec w, vec f);
 void printpol(vec a);
 vec vadd(vec a, vec b);
 vec vmul(vec a, vec b);

@@ -288,23 +288,10 @@ OP norm(OP f)
 vec vadd(vec a, vec b)
 {
   vec c = {0};
-  int i, k;
+  size_t len = (size_t)((deg(a) > deg(b) ? deg(a) : deg(b)) + 1);
 
-  if (deg(a) >= deg(b))
-  {
-    k = deg(a) + 1;
-  }
-  else
-  {
-
-    k = deg(b) + 1;
-  }
-  for (i = 0; i < k; i++)
-  {
-    c.x[i] = a.x[i] ^ b.x[i];
-  }
-  // c.x[i] = a.x[i] ^ b.x[i];
-  //  h = v2o (c);
+  xor_u16(c.x, a.x, len);
+  xor_u16(c.x, b.x, len);
 
   return c;
 }
@@ -333,19 +320,18 @@ vec vmul(vec a, vec b)
 
 vec fmul(vec a, vec b)
 {
-  int i, j, k, l;
+  int i, j;
   vec c = {0};
-  OP o = {0}, p = {0}, q = {0};
 
-  k = terms(v2o(a));
-  l = terms(v2o(b));
-  o = v2o(a);
-  p = v2o(b);
-  for (i = 0; i < k; i++)
+  for (i = 0; i < DEG; i++)
   {
-    for (j = 0; j < l; j++)
+    if (a.x[i] == 0)
+      continue;
+
+    for (j = 0; j < DEG - i; j++)
     {
-      c.x[o.t[i].n + p.t[j].n] ^= gf[mlt(fg[o.t[i].a], fg[p.t[j].a])];
+      if (b.x[j] > 0)
+        c.x[i + j] ^= gf[mlt(fg[a.x[i]], fg[b.x[j]])];
     }
   }
 
@@ -2543,8 +2529,9 @@ EX extgcd(OP a, OP b)
 }
 
 // パターソンアルゴリズムでバイナリGoppa符号を復号する
-vec patterson(OP w, OP f)
+vec patterson(vec w_vec, vec f_vec)
 {
+  OP w = v2o(w_vec), f = v2o(f_vec);
   OP g1 = {0}, ll = {0}, op = {0};
   int i, j, k, l, c, n, count = 0, flg2 = 0;
   int flg, o1 = 0;
@@ -2786,7 +2773,7 @@ void decrypt(OP w)
 
   printf("in decrypt\n");
   f = setpol(buf, K);
-  v = patterson(w, f);
+  v = patterson(o2v(w), o2v(f));
 
   // elo(r);
   // exit(1);
@@ -3819,7 +3806,7 @@ aa:
 }
 
 // Niederreiter暗号の公開鍵を作る
-OP pubkeygen()
+vec pubkeygen(void)
 {
   int i, j, k, l;
   unsigned short n[K] = {0};
@@ -3899,7 +3886,7 @@ OP pubkeygen()
   }
   toByte(&O);
 
-  return w;
+  return v;
 }
 
 OP dec(unsigned short ss[])
@@ -4307,7 +4294,7 @@ void fun()
   }
 }
 
-OP zin(unsigned short zz[])
+vec zin(unsigned short zz[])
 {
   int i, j;
   OP s = {0};
@@ -4334,7 +4321,7 @@ OP zin(unsigned short zz[])
   printf(" ==ss\n");
   // exit(1);
 
-  return s;
+  return o2v(s);
 }
 
 OP cos2(unsigned short zz[N])

@@ -88,11 +88,8 @@ int is_reg(const MTX *cc_input, MTX *R)
           // cc.reg=-1;
           return -1;
         }
-        for (k = 0; k < F; k++)
-        {
-          cc.x[i][k] ^= cc.x[j][k] % 2;
-          inv_a[i][k] ^= inv_a[j][k];
-        }
+        xor_u16_mod2(cc.x[i], cc.x[j], F);
+        xor_u8(inv_a[i], inv_a[j], F);
 
         cc.x[i][i] = 1;
       }
@@ -105,11 +102,8 @@ int is_reg(const MTX *cc_input, MTX *R)
           if (cc.x[l][i] == 1)
           {
             //#pragma omp parallel for
-            for (k = 0; k < F; k++)
-            {
-              cc.x[l][k] ^= cc.x[i][k] % 2;
-              inv_a[l][k] ^= inv_a[i][k];
-            }
+            xor_u16_mod2(cc.x[l], cc.x[i], F);
+            xor_u8(inv_a[l], inv_a[i], F);
           }
         }
 
@@ -126,13 +120,8 @@ int is_reg(const MTX *cc_input, MTX *R)
       {
         if (cc.x[k][i] == 1)
         {
-          for (j = 0; j < F; j++)
-          {
-            // if(a[k][i]==1){
-            cc.x[k][j] ^= cc.x[i][j] % 2;
-            inv_a[k][j] ^= inv_a[i][j];
-            //}
-          }
+          xor_u16_mod2(cc.x[k], cc.x[i], F);
+          xor_u8(inv_a[k], inv_a[i], F);
         }
       }
     }
@@ -301,11 +290,8 @@ int mkS(const MTX *cc_input, MTX *R)
           return -1;
           // goto labo;
         }
-        for (k = 0; k < X; k++)
-        {
-          cc.x[i][k] ^= cc.x[j][k] % 2;
-          inv_a[i][k] ^= inv_a[j][k];
-        }
+        xor_u16_mod2(cc.x[i], cc.x[j], X);
+        xor_u8(inv_a[i], inv_a[j], X);
 
         cc.x[i][i] = 1;
       }
@@ -318,11 +304,8 @@ int mkS(const MTX *cc_input, MTX *R)
           if (cc.x[l][i] == 1)
           {
             //#pragma omp parallel for
-            for (k = 0; k < X; k++)
-            {
-              cc.x[l][k] ^= cc.x[i][k] % 2;
-              inv_a[l][k] ^= inv_a[i][k];
-            }
+            xor_u16_mod2(cc.x[l], cc.x[i], X);
+            xor_u8(inv_a[l], inv_a[i], X);
           }
         }
 
@@ -339,13 +322,8 @@ int mkS(const MTX *cc_input, MTX *R)
       {
         if (cc.x[k][i] == 1)
         {
-          for (j = 0; j < X; j++)
-          {
-            // if(a[k][i]==1){
-            cc.x[k][j] ^= cc.x[i][j] % 2;
-            inv_a[k][j] ^= inv_a[i][j];
-            //}
-          }
+          xor_u16_mod2(cc.x[k], cc.x[i], X);
+          xor_u8(inv_a[k], inv_a[i], X);
         }
       }
     }
@@ -550,11 +528,8 @@ int mkRS(const MTX *cc_input, MTX *R)
           return -1;
           // goto labo;
         }
-        for (k = 0; k < AY; k++)
-        {
-          cc.x[i][k] ^= cc.x[j][k] % 2;
-          inv_a[i][k] ^= inv_a[j][k];
-        }
+        xor_u16_mod2(cc.x[i], cc.x[j], AY);
+        xor_u8(inv_a[i], inv_a[j], AY);
 
         cc.x[i][i] = 1;
       }
@@ -567,11 +542,8 @@ int mkRS(const MTX *cc_input, MTX *R)
           if (cc.x[l][i] == 1)
           {
             //#pragma omp parallel for
-            for (k = 0; k < AY; k++)
-            {
-              cc.x[l][k] ^= cc.x[i][k] % 2;
-              inv_a[l][k] ^= inv_a[i][k];
-            }
+            xor_u16_mod2(cc.x[l], cc.x[i], AY);
+            xor_u8(inv_a[l], inv_a[i], AY);
           }
         }
 
@@ -588,13 +560,8 @@ int mkRS(const MTX *cc_input, MTX *R)
       {
         if (cc.x[k][i] == 1)
         {
-          for (j = 0; j < AY; j++)
-          {
-            // if(a[k][i]==1){
-            cc.x[k][j] ^= cc.x[i][j] % 2;
-            inv_a[k][j] ^= inv_a[i][j];
-            //}
-          }
+          xor_u16_mod2(cc.x[k], cc.x[i], AY);
+          xor_u8(inv_a[k], inv_a[i], AY);
         }
       }
     }
@@ -799,11 +766,8 @@ int binv(const MTX *cc_input, MTX *L, int Y)
           return -1;
           // goto labo;
         }
-        for (k = 0; k < Y; k++)
-        {
-          cc.x[i][k] ^= cc.x[j][k] % 2;
-          inv_a[i][k] ^= inv_a[j][k];
-        }
+        xor_u16_mod2(cc.x[i], cc.x[j], Y);
+        xor_u8(inv_a[i], inv_a[j], Y);
 
         cc.x[i][i] = 1;
       }
@@ -816,11 +780,8 @@ int binv(const MTX *cc_input, MTX *L, int Y)
           if (cc.x[l][i] == 1)
           {
             //#pragma omp parallel for
-            for (k = 0; k < Y; k++)
-            {
-              cc.x[l][k] ^= cc.x[i][k] % 2;
-              inv_a[l][k] ^= inv_a[i][k];
-            }
+            xor_u16_mod2(cc.x[l], cc.x[i], Y);
+            xor_u8(inv_a[l], inv_a[i], Y);
           }
         }
 
@@ -837,13 +798,8 @@ int binv(const MTX *cc_input, MTX *L, int Y)
       {
         if (cc.x[k][i] == 1)
         {
-          for (j = 0; j < Y; j++)
-          {
-            // if(a[k][i]==1){
-            cc.x[k][j] ^= cc.x[i][j] % 2;
-            inv_a[k][j] ^= inv_a[i][j];
-            //}
-          }
+          xor_u16_mod2(cc.x[k], cc.x[i], Y);
+          xor_u8(inv_a[k], inv_a[i], Y);
         }
       }
     }
