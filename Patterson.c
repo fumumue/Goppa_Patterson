@@ -6,34 +6,18 @@
 // status    : majer release (ver 1.0)
 //  Niederreiter Cryotosysytem by patterson's decoding
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include "common.h"
+#include "sha3.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <stdlib.h>
 #include <sys/mman.h>
-#include <assert.h>
 #include <execinfo.h>
-#include <omp.h>
 
 // #include "8192.h"
 // #include "4096.h"
-#include "global.h"
-#include "struct.h"
-#include "debug.c"
-#include "ecole.c"
-#include "chash.c"
-#include "lu.c"
-#include "sha3.c"
-#include "inv_mat.c"
 //#include "vc3000.c"
 // #include "golay.c"
 
@@ -44,9 +28,18 @@ extern int mlt(int x, int y);
 extern int mltn(int n, int a);
 extern void makeS();
 
+static unsigned short c[E * K + 1] = {0};
+static unsigned short mat[N][K * E] = {0};
+static unsigned short ma[N][K * E] = {0};
+static unsigned short bm[N][K * E] = {0};
+static unsigned short bm2[N][K * E] = {0};
+
 // #pragma omp threadprivate(mat)
 // シンドロームのコピー
 unsigned short sy[K] = {0};
+unsigned short P[N] = {0};
+unsigned short inv_P[N] = {0};
+unsigned short uu = 0;
 
 // Goppa多項式
 static unsigned short g[K + 1] = {1, 0, 0, 0, 1, 0, 1};
@@ -136,23 +129,6 @@ OP v2o(vec a)
   }
 
   return f;
-}
-
-OP v4x(vec a)
-{
-  OP x = {0};
-  int i, count = 0;
-
-  for (i = 0; i < DEG; i++)
-  {
-    if (a.x[i] > 0)
-    {
-      x.t[count].a = a.x[i];
-      x.t[count++].n = i;
-    }
-  }
-
-  return x;
 }
 
 // 停止コマンド
@@ -295,7 +271,6 @@ OP norm(OP f)
 {
   OP h = {0};
   int i;
-
   for (i = 0; i < DEG; i++)
   {
     if (f.t[i].a > 0)
@@ -364,8 +339,8 @@ vec fmul(vec a, vec b)
 
   k = terms(v2o(a));
   l = terms(v2o(b));
-  o = v4x(a);
-  p = v4x(b);
+  o = v2o(a);
+  p = v2o(b);
   for (i = 0; i < k; i++)
   {
     for (j = 0; j < l; j++)
@@ -1802,59 +1777,7 @@ OP bibun(vec a)
 // 多項式の形式的微分
 OP bibun_old(vec a)
 {
-  OP w[T * 2] = {0};
-  OP l = {0}, t = {
-                  0};
-  int i, j, n, id;
-  vec tmp = {0};
-
-  n = deg(a);
-  printf("n=%d\n", n);
-  if (n == 0)
-  {
-    printf("baka8\n");
-    //  exit(1);
-  }
-
-  //
-  for (i = 0; i < T; i++)
-  {
-    w[i].t[0].a = a.x[i];
-    w[i].t[0].n = 0;
-    w[i].t[1].a = 1;
-    w[i].t[1].n = 1;
-    ////printpol(o2v(w[i]));
-  }
-  // exit(1);
-
-  tmp.x[0] = 1;
-  //
-
-  // #pragma omp parallel for private(i,j)
-  for (i = 0; i < T; i++)
-  {
-    t = v2o(tmp);
-    //
-    for (j = 0; j < T; j++)
-    {
-      // #pragma omp critical
-      if (i != j)
-      {
-        t = omul(t, w[j]);
-      }
-    }
-
-    // printpol(o2v(t));
-    //
-    if (deg(o2v(t)) == 0)
-    {
-      printf("baka9\n");
-      // exit(1);
-    }
-    l = oadd(l, t);
-  }
-
-  return l;
+  return bibun(a);
 }
 
 // chen探索
@@ -2065,16 +1988,14 @@ int ben_her(OP f)
   return 0;
 }
 
-// ユークリッドアルゴリズムによる復号関数
-OP decode(OP f, OP s)
+// 訂正可能な誤り数を指定して復号する共通処理
+static OP decode_with_capacity(OP f, OP s, int max_errors)
 {
-  int i, j, k, count = 0;
+  int i, j, k;
   OP r = {0}, w = {0}, e = {0}, l = {0};
-  oterm t1, t2, d1, a, b;
+  oterm t1, t2;
   vec x = {0};
-  unsigned short d = 0;
   OP h = {0};
-  EX hh = {0};
 
   printf("in decode\n");
   printpol(o2v(s));
@@ -2091,7 +2012,7 @@ OP decode(OP f, OP s)
   x = chen(r);
   // exit(1);
 
-  for (i = 0; i < T; i++)
+  for (i = 0; i < max_errors; i++)
   {
     printf("x[%d]=1\n", x.x[i]);
     if (x.x[i] == 0)
@@ -2113,7 +2034,7 @@ OP decode(OP f, OP s)
   printf("あっ、でる！\n");
   //  exit(1);
 
-  if (odeg((r)) < T)
+  if (odeg((r)) < max_errors)
   {
     printpol(o2v(r));
     printf("baka5 deg(r)<T\n");
@@ -2178,118 +2099,16 @@ OP decode(OP f, OP s)
   return e;
 }
 
-// ユークリッドアルゴリズムによる復号関数
+// T個の誤りを訂正する復号関数
+OP decode(OP f, OP s)
+{
+  return decode_with_capacity(f, s, T);
+}
+
+// 2T個の誤りを対象にする復号関数
 OP sendrier(OP f, OP s)
 {
-  int i, j, k, count = 0;
-  OP r = {0}, w = {0}, e = {0}, l = {0};
-  oterm t1, t2, d1, a, b;
-  vec x = {0};
-  unsigned short d = 0;
-  OP h = {0};
-  EX hh = {0};
-
-  printf("in decode\n");
-  printpol(o2v(s));
-  printf("\nsyn===========\n");
-  r = vx(f, s);
-  // h=ogcd(f,s);
-
-  if (odeg((r)) == 0)
-  {
-    printf("baka12\n");
-    exit(1);
-  }
-  k = 0;
-  // exit(1);
-  x = chen(r);
-  // exit(1);
-
-  for (i = 0; i < T * 2; i++)
-  {
-    printf("x[%d]=1\n", x.x[i]);
-    if (x.x[i] == 0)
-      k++;
-    if (k > 1)
-    {
-      printf("baka0\n");
-      printvec(o2v(f));
-      // for (i = 0; i < N; i++)
-      // printf("%d,", zz[i]);
-      exit(1);
-      // return f;
-    }
-  }
-  // exit(1);
-
-  //  printf("\n");
-
-  printf("あっ、でる！\n");
-  //  exit(1);
-
-  if (odeg((r)) < T * 2)
-  {
-    printpol(o2v(r));
-    printf("baka5 deg(r)<T\n");
-    exit(1);
-  }
-
-  w = bibun(x);
-  // exit(1);
-  //   w=oterml(w,d1);
-  printpol(o2v(w));
-  printf("@@@@@@@@@\n");
-  // exit(1);
-
-  // hh = xgcd(f, s);
-  h = zgcd(f, s, T - 1);
-  // printpol(o2v(hh.d));
-  printpol(o2v(h));
-  // wait();
-
-  //  exit(1);
-  t1 = LT(r);
-
-  t2.a = t1.a;
-  t2.n = 0;
-
-  if (odeg((w)) == 0)
-  {
-    printpol(o2v(w));
-  }
-  l = oterml(w, t2);
-
-  j = deg(x) + 1;
-  printf("%d\n", j);
-
-  //    exit(1);
-
-  for (i = 0; i < j; i++)
-  {
-    // if (x.x[i] > 0)
-    {
-      // e.t[i].a =
-      //   gf[mlt(fg[trace(hh.d, x.x[i])], oinv(trace(l, x.x[i])))];
-      e.t[i].a = gf[mlt(fg[trace(h, x.x[i])], oinv(trace(l, x.x[i])))];
-      e.t[i].n = x.x[i];
-    }
-  }
-  printpol(o2v(f));
-  printf(" f============\n");
-  printpol(o2v(l));
-  printf(" l============\n");
-  //  exit(1);
-
-  for (i = 0; i < T; i++)
-    if (gf[trace(h, x.x[i])] == 0)
-      printf("h=0");
-  // printf("\n");
-  for (i = 0; i < T; i++)
-    if (gf[oinv(trace(l, x.x[i]))] == 0)
-      printf("l=0\n");
-  //  printf("\n");
-
-  return e;
+  return decode_with_capacity(f, s, T * 2);
 }
 
 // 配列の値を係数として多項式に設定する
@@ -2347,7 +2166,7 @@ void bdet()
 }
 
 // バイナリ型パリティチェック行列を生成する
-void toBit(MTX L)
+void toBit(const MTX *L)
 {
   int i, j, k, l;
   unsigned char dd[E * K] = {0};
@@ -2359,7 +2178,7 @@ void toBit(MTX L)
   {
     for (j = 0; j < K; j++)
     {
-      l = L.x[i][j];
+      l = L->x[i][j];
       printf("l=%d,", l);
       // #pragma omp parallel for
       for (k = 0; k < E; k++)
@@ -2389,7 +2208,7 @@ void toBit(MTX L)
 
 unsigned short HH[N][K];
 
-void toByte(MTX SH)
+void toByte(const MTX *SH)
 {
   vec v = {0};
   int i, j, k, cnt;
@@ -2404,7 +2223,7 @@ void toByte(MTX SH)
         k = j * E;
         x=0;
         for (int l = 0; l < E; l++){
-          x ^= (SH.x[i][k + l]<<l);
+          x ^= (SH->x[i][k + l]<<l);
           }
         HH[i][j] = x;//v2i(v);
       // printf("%d,", HH[i][j]);
@@ -3564,10 +3383,11 @@ void GF_mul(unsigned short *out, unsigned short *in0, unsigned short *in1)
 }
 
 // #define NN 16
-vec renritu(MTX a)
+vec renritu(const MTX *input)
 {
   unsigned short p, d;
   int i, j, k;
+  MTX a = *input;
   vec v = {0};
 
   for (i = 0; i < K; i++)
@@ -3626,10 +3446,11 @@ vec renritu(MTX a)
 }
 
 // #define NN 16
-vec sol(MTX a)
+vec sol(const MTX *input)
 {
   unsigned short p, d;
   int i, j, k;
+  MTX a = *input;
   vec v = {0};
 
   for (i = 0; i < K / 2; i++)
@@ -3724,7 +3545,7 @@ int mykey(unsigned short *out, vec x)
   // exit(1);
 
   vec v = {0};
-  v = renritu(a);
+  v = renritu(&a);
 
   for (i = 0; i < K; i++)
   {
@@ -4042,7 +3863,7 @@ OP pubkeygen()
       for (j = 0; j < (K)*E; j++)
         S.x[i][j] = xor128() % 2;
     }
-  } while (is_reg(S, &inv_S) == -1);
+  } while (is_reg(&S, &inv_S) == -1);
 
   /*
     fp = fopen("inv_S.key", "wb");
@@ -4070,13 +3891,13 @@ OP pubkeygen()
   */
 
   //  exit(1);
-  H = mulmat(S, BB, 1);
+  H = mulmat(&S, &BB, 1);
   for (i = 0; i < K * E; i++)
   {
     for (j = 0; j < N; j++)
       O.x[j][i] = H.x[P[j]][i];
   }
-  toByte(O);
+  toByte(&O);
 
   return w;
 }
@@ -4704,84 +4525,4 @@ OP bms(unsigned short s[])
   }
 
   // return lo[j-1];
-}
-
-// 言わずもがな
-int main(void)
-{
-  unsigned short z1[N] = {0}; //{1,0,1,1,1,0,0,0,0,0,1,1,1,0,0,1};
-  OP f = {0}, r = {0}, w = {0};
-  vec v;
-  unsigned short ss[K] = {0};
-
-  srand(clock());
-  if (K > N)
-  {
-    printf("configuration error! K is too big K\n");
-    exit(1);
-  }
-  gen_gf(E, N, 1);
-  // kabatiansky example
-  unsigned short s[K + 1] = {0, 15, 1, 9, 13, 1, 14};
-  // Berlekamp-Massey法（UnderConstruction）
-  // bms(s);
-  // exit(1);
-  // g=4x^4+1x^2+8x^1+1x^0, e={3,4,9,11} <- bug finder
-
-  int j = 0;
-
-  // chu();
-  //w = mkg();
-  for(int i=0;i<N;i++)
-  printf("%d %d\n",oinv(i),oinv2(i));
-  //exit(1);
-
-  // 公開鍵を生成する
-  w = pubkeygen();
-  // op will extention
-  /*
-  printsage(o2v(w));
-  printf(" sage\n");
-  printpol(o2v(w));
-  printf("\n");
-  exit(1);
-  */
-  
-  while (1)
-  {
-
-    // エラーベクトルを生成する
-    memset(z1, 0, sizeof(z1));
-    mkerr(z1, K);
-    //for(int i=0;i<K;i++)
-    //z1[i]=1;
-/*
-    f = synd(z1);
-    v = patterson(w, f);
-    ero(v);
-    exit(1);
-*/
-    // encryotion
-    //test(w, z1);
-    //wait();
-
-    // シンドロームを計算する
-    f = zin(z1);
-    printpol(o2v(f));
-    printf(" ==syndrome\n");
-
-    // 復号化の本体
-    v = patterson(w, f);
-
-    // エラー表示
-    if(ero2(v)<0){
-    for(int i=0;i<N;i++)
-    if(z1[i]>0)
-    printf("i=%d\n",i);
-    }
-
-    break;
-  }
-
-  return 0;
 }

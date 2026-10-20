@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "common.h"
 #include "sha3.h"
 
 #define SHA3_ASSERT( x )

@@ -1,15 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <stdint.h>
+#include "common.h"
 
 //#include "8192.h"
-#include "global.h"
-#include "struct.h"
-#include "ecole.c"
-#include "chash.c"
-#include "debug.c"
-#include <assert.h>
 //#include "gf.h"
 
 #define L 3 //配列の次数

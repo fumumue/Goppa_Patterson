@@ -4,18 +4,21 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "common.h"
+
 #define F K *E
 #define X (K) * E
 #define AY (K / 2 + 1) * E
 
-static MTX inv_S = {0};
-static MTX S = {0};
+MTX inv_S = {0};
+MTX S = {0};
 static MTX SS = {0};
 
 extern void makeS();
 
-int is_reg(MTX cc, MTX *R)
+int is_reg(const MTX *cc_input, MTX *R)
 {
+  MTX cc = *cc_input;
 
   int i, j, k, l;
   unsigned char b[K * E][K * E] = {0};
@@ -205,8 +208,9 @@ int is_reg(MTX cc, MTX *R)
   return -1;
 }
 
-int mkS(MTX cc, MTX *R)
+int mkS(const MTX *cc_input, MTX *R)
 {
+  MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[X][X] = {0};
   unsigned char dd[X] = {0};
@@ -453,8 +457,9 @@ int mkS(MTX cc, MTX *R)
   return -1;
 }
 
-int mkRS(MTX cc, MTX *R)
+int mkRS(const MTX *cc_input, MTX *R)
 {
+  MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[AY][AY] = {0};
   unsigned char dd[AY] = {0};
@@ -701,8 +706,9 @@ int mkRS(MTX cc, MTX *R)
   return -1;
 }
 
-int binv(MTX cc, MTX *L, int Y)
+int binv(const MTX *cc_input, MTX *L, int Y)
 {
+  MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[N][N] = {0};
   unsigned char dd[N] = {0};

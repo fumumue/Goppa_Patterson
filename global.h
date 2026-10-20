@@ -1,3 +1,6 @@
+#ifndef GOPPA_GLOBAL_H
+#define GOPPA_GLOBAL_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,15 +15,12 @@
 #define DEG K*E //(K * E)
 #define T (K/2) //エラーの数
 
+#define GF_TABLE_SIZE 32768
 
+extern unsigned short gf[GF_TABLE_SIZE];
+extern unsigned short fg[GF_TABLE_SIZE];
+extern unsigned short P[N];
+extern unsigned short inv_P[N];
+extern unsigned short uu;
 
-static unsigned short c[E * K + 1] = {0};
-static unsigned short mat[N][K*E] = {0};
-static unsigned short ma[N][K*E] = {0};
-static unsigned short bm[N][K*E]={0};
-static unsigned short bm2[N][K*E]={0};
-
-//unsigned short syn[K]={0};
-unsigned short P[N] = {0};
-unsigned short inv_P[N] = {0};
-unsigned short uu = 0;
+#endif

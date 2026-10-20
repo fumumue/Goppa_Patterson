@@ -22,7 +22,9 @@
 #include <string.h>
 #include <ctype.h>
 
-#define MAX_ORD 32768
+#include "common.h"
+
+#define MAX_ORD GF_TABLE_SIZE
 
 /***************************************************************
  * 関数名     : void gen_gf(int deg, int order)
@@ -44,8 +46,8 @@
  *              有限体を生成することができます。
  *  ****************************************************************/
 // Zech対数の正引き gf と逆引き fg
-static unsigned short gf[MAX_ORD];
-static unsigned short fg[MAX_ORD];
+unsigned short gf[MAX_ORD];
+unsigned short fg[MAX_ORD];
 void gen_gf(int deg, int order, int opt_sage)
 {
     // #ifdef SAGE

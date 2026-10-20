@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <string.h>
 
+#include "common.h"
 
 //#define O 8  //素数の和(3*5=15 の位数を持つ)
 #define MAX 2 // 素数表の先頭から何個素数を足すか
@@ -19,7 +20,6 @@ unsigned char aa[64]; //={ 148, 246, 52, 251, 16, 194, 72, 150, 249, 23, 90, 107
 #define str_length 128
 #define password_length 256
 
-#define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof(array[0]))
 #define SWAP(type, a, b) \
   {                      \
     type work = a;       \

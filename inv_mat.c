@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
+#include "common.h"
 //#include "chash.c"
 #define MAXN 4
 //#define N 256 //order of GF(q)
@@ -88,8 +90,9 @@ int Inv(unsigned short b)
   return -1;
 }
 
-MTX gauss(MTX a)
+MTX gauss(const MTX *input)
 {
+  MTX a = *input;
   int i, j, k, buf = 0;
   unsigned short ff = 0, inv_a[F][F] = {0};
   static MTX TT = {0}, b;
@@ -157,8 +160,9 @@ MTX gauss(MTX a)
 }
 
 // inverse matrix
-MTX matinv(MTX a, int n)
+MTX matinv(const MTX *input, int n)
 {
+  MTX a = *input;
 
   // unsigned short a[F][F];     //={{1,2,0,1},{1,1,2,0},{2,0,1,1},{1,2,1,1}}; //入力用の配列
   unsigned short inv_a[N][N]; //ここに逆行列が入る
@@ -319,7 +323,7 @@ lab:
   goto lab;
 }
 
-MTX mulmat(MTX A, MTX B, int flg)
+MTX mulmat(const MTX *A, const MTX *B, int flg)
 {
   int i, j, k;
   static MTX tmp = {0};
@@ -334,7 +338,7 @@ MTX mulmat(MTX A, MTX B, int flg)
         for (k = 0; k < K * E; k++)
         {
           // tmp.z[j][i] ^= gf[mlt(fg[A.w[i][k]], fg[B.z[j][k]])];
-          tmp.x[j][i] ^= A.x[i][k] & B.x[j][k];
+          tmp.x[j][i] ^= A->x[i][k] & B->x[j][k];
         }
         // printf("%d,",tmp.z[j][i]);
       }
@@ -353,7 +357,7 @@ MTX mulmat(MTX A, MTX B, int flg)
         for (k = 0; k < E * (K / 2 + 1); k++)
         {
           // tmp.w[j][i] ^= gf[mlt(fg[A.w[i][k]], fg[B.z[j][k]])];
-          tmp.x[j][i] ^= A.x[i][k] & B.x[j][k];
+          tmp.x[j][i] ^= A->x[i][k] & B->x[j][k];
         }
       }
     }
@@ -367,7 +371,7 @@ MTX mulmat(MTX A, MTX B, int flg)
       {
         for (k = 0; k < K * E; k++)
         {
-          tmp.x[i][j] ^= gf[mlt(fg[A.x[i][k]], fg[B.x[k][j]])];
+          tmp.x[i][j] ^= gf[mlt(fg[A->x[i][k]], fg[B->x[k][j]])];
         }
       }
     }
@@ -376,18 +380,18 @@ MTX mulmat(MTX A, MTX B, int flg)
   return tmp;
 }
 
-void mmul(MTX A, MTX B)
+void mmul(const MTX *A, const MTX *B)
 {
   int i, j, k;
   static MTX tmp = {0};
 
-  for (i = 0; i < A.b.col; i++)
+  for (i = 0; i < A->b.col; i++)
   {
-    for (j = 0; j < B.b.col; j++)
+    for (j = 0; j < B->b.col; j++)
     {
-      for (k = 0; k < A.b.row; k++)
+      for (k = 0; k < A->b.row; k++)
       {
-        tmp.x[i][j] ^= gf[mlt(fg[A.x[i][k]], fg[B.x[k][j]])];
+        tmp.x[i][j] ^= gf[mlt(fg[A->x[i][k]], fg[B->x[k][j]])];
       }
       printf("%d,", tmp.x[i][j]);
     }
@@ -473,6 +477,7 @@ random_shuffle(x0,SIZE_OF_ARRAY(x0));
 }
 
 /*
+#ifdef INV_MAT_DEMO
 int main(){
 
     int i,j;
@@ -495,4 +500,5 @@ int main(){
 
     return 0;
 }
+#endif
 */
