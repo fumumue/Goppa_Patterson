@@ -8,29 +8,9 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #define REG 64
-extern unsigned long xor128(void);
 extern int mlt(int x, int y);
 extern int mltn(int n, int a);
 extern void makeS();
-
-static unsigned short c[E * K + 1] = {0};
-static unsigned short mat[N][K * E] = {0};
-static unsigned short ma[N][K * E] = {0};
-static unsigned short bm[N][K * E] = {0};
-static unsigned short bm2[N][K * E] = {0};
-
-// シンドロームのコピー
-unsigned short P[N] = {0};
-unsigned short inv_P[N] = {0};
-unsigned short uu = 0;
-
-// Goppa多項式
-static unsigned short g[K + 1] = {1, 0, 0, 0, 1, 0, 1};
-//{1,0,1,1};
-static MTX BB = {0};
-static MTX H = {0};
-
-unsigned int AA = 0, B = 0; //, C = 0, A2 = 0;
 
 // 有限体の元の逆数
 unsigned short
@@ -1089,22 +1069,20 @@ v2i(vec v)
 }
 
 // 配列からベクトル表現の多項式へ変換する
-vec Setvec(int n)
+vec Setvec(const unsigned short coefficients[], int n)
 {
   int i;
   vec v = {0};
 
   for (i = 0; i < n; i++)
   {
-    v.x[n - 1 - i] = c[i];
+    v.x[n - 1 - i] = coefficients[i];
   }
 
   return v;
 }
 
-OP ww[T] = {0};
-
-OP bib(int i, OP d)
+static OP bib(int i, OP d, const OP ww[T])
 {
   int id, j;
 
@@ -1164,6 +1142,7 @@ int ben_or(OP f)
 {
   int i, n;
   OP d = {0};
+  OP ww[T] = {0};
   n = deg(o2v(f));
 
   if (n == 0)
@@ -1174,7 +1153,7 @@ int ben_or(OP f)
   {
 #pragma omp for schedule(static)
     for (i = 0; i < n / 2 + 1; i++)
-      t[i] = bib(i, d);
+      t[i] = bib(i, d, ww);
   }
 
   return 0;
@@ -1183,37 +1162,22 @@ int ben_or(OP f)
 // 配列の値を係数として多項式に設定する
 OP setpol(unsigned short f[], int n)
 {
-  OP g;
-  vec a;
-  int i;
-
-  memset(c, 0, sizeof(c));
-  memcpy(c, f, 2 * n);
-  a = Setvec(n);
-
-  g = v2o(a);
-
-  return g;
+  return v2o(Setvec(f, n));
 }
 
 // バイナリ型パリティチェック行列を生成する
-void bdet()
+static void bdet(const unsigned short matrix[N][K * E], MTX *check_matrix)
 {
   int i, j, k, l;
-  unsigned char dd[E * K] = {0};
-  FILE *ff;
-
-  // ff = fopen("Hb.key", "wb");
 
   for (i = 0; i < N; i++)
   {
     for (j = 0; j < K; j++)
     {
-      l = mat[i][j];
-      // #pragma omp parallel for
+      l = matrix[i][j];
       for (k = 0; k < E; k++)
       {
-        BB.x[i][j * E + k] = l % 2;
+        check_matrix->x[i][j * E + k] = l % 2;
         l = (l >> 1);
       }
     }
@@ -1221,25 +1185,15 @@ void bdet()
 
   for (i = 0; i < N; i++)
   {
-    // #pragma omp parallel for
     for (j = 0; j < E * K; j++)
-    {
-      printf("%d,", BB.x[i][j]);
-      // dd[j] = BH[j][i];
-    }
-    // fwrite(dd, 1, E * K, ff);
+      printf("%d,", check_matrix->x[i][j]);
     printf("\n");
   }
-
-  // fclose(ff);
 }
 
-unsigned short HH[N][K];
-
-void toByte(const MTX *SH)
+void toByte(const MTX *SH, unsigned short syndrome_matrix[N][K])
 {
-  vec v = {0};
-  int i, j, k, cnt;
+  int i, j, k;
 
   for (i = 0; i < N; i++)
   {
@@ -1253,40 +1207,20 @@ void toByte(const MTX *SH)
         for (int l = 0; l < E; l++){
           x ^= (SH->x[i][k + l]<<l);
           }
-        HH[i][j] = x;//v2i(v);
-      // printf("%d,", HH[i][j]);
-      //= BH[j][i];
+        syndrome_matrix[i][j] = x;
     }
-    // fwrite(dd, 1, E * K, ff);
-    // printf("\n");
   }
   printf("end of byte\n");
-  // exit(1);
 }
 
 // 秘密置換を生成する
-void Pgen()
+void Pgen(unsigned short permutation[N])
 {
-  unsigned int i, j;
-  FILE *fp;
+  unsigned int i;
 
-  //fp = fopen("P.key", "wb");
   for (i = 0; i < N; i++)
-    P[i] = i;
-  random_shuffle(P, SIZE_OF_ARRAY(P));
-  //  random_permutation(P);
-  for (i = 0; i < N; i++)
-    inv_P[P[i]] = i;
-  //fwrite(P, 2, N, fp);
-  //fclose(fp);
-
-  // for (i = 0; i < N; i++)
-  // printf ("%d,", inv_P[i]);
-  // printf ("\n");
-
-  // fp = fopen("inv_P.key", "wb");
-  // fwrite(inv_P, 2, N, fp);
-  // fclose(fp);
+    permutation[i] = i;
+  random_shuffle(permutation, N);
 }
 
 // 有限体の元の平方を計算する
@@ -1647,40 +1581,31 @@ vec patterson(vec w_vec, vec f_vec)
   return v;
 }
 
-unsigned short vb[K * 2][N] = {0};
-unsigned short gt[K * 2][K * 2] = {0};
-
-void van()
+static void van(unsigned short powers[K * 2][N])
 {
-  int i, j, k;
+  int i, j;
 
   printf("van der\n");
 
   for (i = 0; i < N; i++)
-    vb[0][i] = 1;
-  // #pragma omp parallel for private(i, j)
+    powers[0][i] = 1;
   for (i = 1; i < K; i++)
   {
     for (j = 0; j < N; j++)
-      vb[i][j] = gf[mltn(i, fg[j])];
+      powers[i][j] = gf[mltn(i, fg[j])];
   }
 }
 
-void ogt(unsigned short g[K+1])
+static void ogt(const unsigned short polynomial[K + 1], unsigned short table[K * 2][K * 2])
 {
-  int i, j, k;
-  OP w = {0};
-  unsigned short abc[N][K] = {0};
+  int i, j;
 
-  // #pragma omp parallel for private(i, j)
   for (i = 0; i < K; i++)
   {
     for (j = 0; j < K - i; j++)
-      gt[i][j + i] = g[j];
+      table[i][j + i] = polynomial[j];
   }
 }
-
-unsigned short dd[N][N] = {0};
 
 /* input: in0, in1 in GF((2^m)^t)*/
 /* output: out = in0*in1 */
@@ -1891,7 +1816,7 @@ vec renritu(const MTX *input)
 int mykey(unsigned short *out, vec x)
 {
   unsigned short mat[K + 1][K] = {0};
-  static MTX a = {0};
+  MTX a = {0};
   int i, j;
 
   // fill matrix
@@ -1934,13 +1859,15 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
-OP mkg()
+static OP mkg(unsigned short matrix[N][K * E])
 {
   int i, j, k, l, ii = 0;
   OP w = {0}, f;
   unsigned short tr[N] = {0};
   unsigned short ta[N] = {0};
-
+  unsigned short ma[N][K * E] = {0};
+  unsigned short powers[K * 2][N] = {0};
+  unsigned short polynomial_table[K * 2][K * 2] = {0};
   unsigned short g1[3] = {1, 1, 3};
 
   // w=setpol(g,K+1);
@@ -2029,31 +1956,20 @@ aa:
   printf("sagemath で既約性を検査してください！\n");
   */
 
-  van();
-  //for(int i=0;i<K;i++)
-  //g[i]=tt.x[i];
-  ogt(tt.x);
-  memset(mat, 0, sizeof(mat));
-
-  // wait();
-
-  // #pragma omp parallel for
+  van(powers);
+  ogt(tt.x, polynomial_table);
 
   printf("\nすげ、オレもうイキそ・・・\n");
-  // keygen(g);
-  // exit(1);
 
   for (j = 0; j < N; j++)
   {
     for (i = 0; i < K; i++)
     {
-      ma[j][i] = gf[mlt(fg[vb[i][j]], tr[j])];
+      ma[j][i] = gf[mlt(fg[powers[i][j]], tr[j])];
     }
-    // printf("tr[%d]=%d\n",j,tr[j]);
   }
 
   unsigned short s;
-  // #pragma omp parallel for default(none) private(i, j, k, s) shared(mat, gt, ma, gf, fg)
   for (i = 0; i < K; i++)
   {
     for (j = 0; j < N; j++)
@@ -2061,9 +1977,9 @@ aa:
       s = 0;
 
       for (k = 0; k < K; k++)
-        s ^= gf[mlt(fg[gt[k][i]], fg[ma[j][k]])];
+        s ^= gf[mlt(fg[polynomial_table[k][i]], fg[ma[j][k]])];
        printf("%d,",s);
-      mat[j][i] = s;
+      matrix[j][i] = s;
     }
   }
   // printf("\n");
@@ -2072,7 +1988,7 @@ aa:
   for (j = 0; j < N; j++)
   {
     for (i = 0; i < K; i++)
-      printf("%d,", mat[j][i]);
+      printf("%d,", matrix[j][i]);
     printf("\n");
   }
   // exit(1);
@@ -2082,17 +1998,20 @@ aa:
 }
 
 // Niederreiter暗号の公開鍵を作る
-vec pubkeygen(void)
+vec pubkeygen(unsigned short permutation[N],
+              MTX *inverse_scrambler,
+              RNG *rng,
+              unsigned short syndrome_matrix[N][K])
 {
   int i, j, k, l;
-  unsigned short n[K] = {0};
   FILE *fp;
-  unsigned short dd[K] = {0};
+  unsigned short field_matrix[N][K * E] = {0};
+  MTX check_matrix = {0}, scrambler = {0}, public_matrix = {0};
+  MTX public_check_matrix = {0};
   OP w = {0};
   vec v = {0};
-  static MTX O, Q;
 
-  w = mkg();
+  w = mkg(field_matrix);
   printpol(o2v(w));
   printf(" ==goppa polynomial\n");
 
@@ -2106,27 +2025,21 @@ vec pubkeygen(void)
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
 
-  bdet();
-  //  toByte(BB);
-  // exit(1);
+  bdet(field_matrix, &check_matrix);
 
-  Pgen();
+  Pgen(permutation);
   fp = fopen("P.key", "w");
-  //  fwrite(P, 2, N, fp);
   fclose(fp);
-  // makeS();
   do
   {
-    memset(Q.x, 0, sizeof(Q.x));
-    memset(O.x, 0, sizeof(O.x));
-    memset(S.x, 0, sizeof(S.x));
+    memset(scrambler.x, 0, sizeof(scrambler.x));
   
     for (i = 0; i < (K)*E; i++)
     {
       for (j = 0; j < (K)*E; j++)
-        S.x[i][j] = xor128() % 2;
+        scrambler.x[i][j] = xor128(rng) % 2;
     }
-  } while (is_reg(&S, &inv_S) == -1);
+  } while (is_reg(&scrambler, inverse_scrambler, rng) == -1);
 
   /*
     fp = fopen("inv_S.key", "wb");
@@ -2154,18 +2067,18 @@ vec pubkeygen(void)
   */
 
   //  exit(1);
-  H = mulmat(&S, &BB, 1);
+  public_check_matrix = mulmat(&scrambler, &check_matrix, 1);
   for (i = 0; i < K * E; i++)
   {
     for (j = 0; j < N; j++)
-      O.x[j][i] = H.x[P[j]][i];
+      public_matrix.x[j][i] = public_check_matrix.x[permutation[j]][i];
   }
-  toByte(&O);
+  toByte(&public_matrix, syndrome_matrix);
 
   return v;
 }
 
-OP dec(unsigned short ss[])
+static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
 {
   int i, j, k;
   vec v = {0};
@@ -2188,7 +2101,7 @@ OP dec(unsigned short ss[])
   for (i = 0; i < K * E; i++)
   {
     for (j = 0; j < K * E; j++)
-      h2o[i] ^= (ch[j] & inv_S.x[i][j]);
+      h2o[i] ^= (ch[j] & inverse_scrambler->x[i][j]);
   }
   // for (i = 0; i < K * E; i++)
   // printf("%d,", h2o[i]);
@@ -2210,7 +2123,7 @@ OP dec(unsigned short ss[])
   return s;
 }
 
-int ero2(vec v)
+int ero2(vec v, const unsigned short permutation[N])
 {
   int i, j, count = 0;
   unsigned short ya[N] = {0}, xa[N] = {0};
@@ -2267,7 +2180,6 @@ int ero2(vec v)
             printf("%d,%d\n", k, v.x[cnt]);
             printsage(o2v(w));
             printf(" ========w\n");
-            AA++;
             break;
             //exit(1);
           }
@@ -2277,7 +2189,7 @@ int ero2(vec v)
 */
   }
   for (i = 0; i < N; i++)
-    ya[i] = xa[P[i]];
+    ya[i] = xa[permutation[i]];
   for (i = 0; i < N; i++)
   {
     if (ya[i] > 0 && i == 0)
@@ -2294,13 +2206,11 @@ int ero2(vec v)
   if (count == T * 2)
   {
     printf("err=%dっ!! \n", count);
-    B++;
   }
   if (count < T * 2)
   {
     printf("error is too few\n");
 
-    AA++;
     // memcpy (zz, z1, sizeof (zz));
     /*
       printf("{");
@@ -2325,14 +2235,14 @@ int ero2(vec v)
   return count;
 }
 
-void mkerr(unsigned short *z1, int num)
+void mkerr(unsigned short *z1, int num, RNG *rng)
 {
   int i, j, l;
   j = 0;
 
   while (j < num)
   {
-    l = xor128() % N;
+    l = xor128(rng) % N;
     // printf ("l=%d\n", l);
     if (0 == z1[l])
     {
@@ -2349,7 +2259,9 @@ void mkerr(unsigned short *z1, int num)
   }
 }
 
-vec zin(unsigned short zz[])
+vec zin(const MTX *inverse_scrambler,
+        const unsigned short syndrome_matrix[N][K],
+        unsigned short zz[])
 {
   int i, j;
   OP s = {0};
@@ -2362,15 +2274,14 @@ vec zin(unsigned short zz[])
     {
       for (j = 0; j < K; j++)
       {
-        ss[j] ^= HH[i][j];
-        // printf("%d,", HH[i][j]);
+        ss[j] ^= syndrome_matrix[i][j];
       }
       // printf("\n");
     }
   }
 
   // 暗号化されたシンドロームを復元する
-  s = dec(ss);
+  s = dec(inverse_scrambler, ss);
   for (j = 0; j < K; j++)
     printf("%d,", ss[j]);
   printf(" ==ss\n");

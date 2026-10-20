@@ -10,13 +10,9 @@
 #define X (K) * E
 #define AY (K / 2 + 1) * E
 
-MTX inv_S = {0};
-MTX S = {0};
-static MTX SS = {0};
-
 extern void makeS();
 
-int is_reg(const MTX *cc_input, MTX *R)
+int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
 {
   MTX cc = *cc_input;
 
@@ -30,7 +26,7 @@ int is_reg(const MTX *cc_input, MTX *R)
   unsigned char inv_a[K * E][K * E] = {0}; //ここに逆行列が入る
   unsigned char buf;                       //一時的なデータを蓄える
   int n = K * E;                           //配列の次数
-  static MTX O = {0};
+  MTX O = {0};
 
   while (flg != F)
   {
@@ -183,7 +179,7 @@ int is_reg(const MTX *cc_input, MTX *R)
         {
           R->x[i][j] = inv_a[i][j];
           // O.reg=0;
-          printf("%d,", inv_S.x[i][j]);
+          printf("%d,", inv_a[i][j]);
         }
          printf("},\n");
       }
@@ -227,7 +223,7 @@ int mkS(const MTX *cc_input, MTX *R)
     for (i = 0; i < X; i++)
     {
       for (j = 0; j < X; j++)
-        cc.x[i][j] = xor128() % 2;
+        cc.x[i][j] = xor128(rng) % 2;
     }
     */
     printf("end of g2\n");
@@ -397,8 +393,7 @@ int mkS(const MTX *cc_input, MTX *R)
         {
           //
           dd[j] = cl[i][j];
-          S.x[i][j] = cl[i][j];
-          printf("%d,", S.x[i][j]);
+          printf("%d,", cl[i][j]);
         }
 
         printf("},\n");
@@ -635,8 +630,7 @@ int mkRS(const MTX *cc_input, MTX *R)
         {
           //
           dd[j] = cl[i][j];
-          S.x[i][j] = cl[i][j];
-          printf("%d,", S.x[i][j]);
+          printf("%d,", cl[i][j]);
         }
 
         printf("},\n");
@@ -873,8 +867,7 @@ int binv(const MTX *cc_input, MTX *L, int Y)
         {
           //
           dd[j] = cl[i][j];
-          S.x[i][j] = cl[i][j];
-          printf("%d,", S.x[i][j]);
+          printf("%d,", cl[i][j]);
         }
 
         printf("},\n");

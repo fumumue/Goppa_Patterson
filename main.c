@@ -1,13 +1,16 @@
 #include "common.h"
 
-void mkerr(unsigned short *z1, int num);
-int ero2(vec v);
+void mkerr(unsigned short *z1, int num, RNG *rng);
 unsigned short oinv(unsigned short a);
 unsigned short oinv2(unsigned short a);
 
 int main(void)
 {
   unsigned short z1[N] = {0}; //{1,0,1,1,1,0,0,0,0,0,1,1,1,0,0,1};
+  unsigned short permutation[N] = {0};
+  unsigned short syndrome_matrix[N][K] = {0};
+  MTX inverse_scrambler = {0};
+  RNG rng = {123456789, 362436069, 521288629, 88675123};
   vec f = {0}, w = {0}, v = {0};
 
   srand(clock());
@@ -21,20 +24,20 @@ int main(void)
   for (int i = 0; i < N; i++)
     printf("%d %d\n", oinv(i), oinv2(i));
 
-  w = pubkeygen();
+  w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
   while (1)
   {
     memset(z1, 0, sizeof(z1));
-    mkerr(z1, K);
+    mkerr(z1, K, &rng);
 
-    f = zin(z1);
+    f = zin(&inverse_scrambler, syndrome_matrix, z1);
     printpol(f);
     printf(" ==syndrome\n");
 
     v = patterson(w, f);
 
-    if (ero2(v) < 0)
+    if (ero2(v, permutation) < 0)
     {
       for (int i = 0; i < N; i++)
       {

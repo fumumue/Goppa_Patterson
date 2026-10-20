@@ -34,6 +34,11 @@ typedef struct
   int f;
 } MT;
 
+typedef struct
+{
+  unsigned long x, y, z, w;
+} RNG;
+
 //extra gcd
 typedef struct
 {

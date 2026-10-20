@@ -1,7 +1,5 @@
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
 
 #include "common.h"
@@ -10,15 +8,9 @@
 #define MAX 2 // 素数表の先頭から何個素数を足すか
 #define NN 8  //置換配列の次元
 
-unsigned char p[2] = {3, 5}; // 8
+static const unsigned char p[2] = {3, 5}; // 8
 // unsigned char p[2]={2,3}; //5
 
-int x[5][NN] = {0};
-
-unsigned char aa[64]; //={ 148, 246, 52, 251, 16, 194, 72, 150, 249, 23, 90, 107, 151, 42, 154, 124, 48, 58, 30, 24, 42, 33, 38, 10, 115, 41, 164, 16, 33, 32, 252, 143, 86, 175, 8, 132, 103, 231, 95, 190, 61, 29, 215, 75, 251, 248, 72, 48, 224, 200, 147, 93, 112, 25, 227, 223, 206, 137, 51, 88, 109, 214, 17, 172};
-
-#define str_length 128
-#define password_length 256
 
 #define SWAP(type, a, b) \
   {                      \
@@ -40,8 +32,6 @@ rotl64(const uint64_t x, const int b)
 {
   return (x << b) | (x >> (64 - b));
 }
-
-char password[password_length + 1];
 
 int desc(const void *a, const void *b)
 {
@@ -69,6 +59,7 @@ void mkcycle()
 {
   int i, j, r, rr, vv, pko, flg, flg2, l, n, ll, jj, flg3, cnt2, v, cnt3 = 0, ii;
   unsigned short cnt, k, count = 0, kk, count2 = 0;
+  int x[5][NN] = {0};
   ;
   unsigned long long int o;
 
@@ -374,62 +365,16 @@ void print_array(const unsigned short *array, size_t size)
   printf("\n");
 }
 
-unsigned long xor128(void)
+unsigned long xor128(RNG *state)
 {
   unsigned int a = 0;
-
-  static unsigned long x = 123456789, y = 362436069, z = 521288629, w = 88675123;
   unsigned long t;
 
   a = rand();
-  t = x ^ (a << 11);
-  a = y;
-  y = z;
-  z = w;
-  return (w = (w ^ (w >> 19)) ^ (t ^ (t >> 8)));
-}
-
-void seed(void)
-{
-  /*
-   * 変数宣言
-   */
-  char str[str_length + 1];
-  time_t t;
-  int i, j, k, rnd;
-
-  /*
-   * 乱数の初期化
-   */
-  srand(clock() + time(&t));
-
-  /*
-   * 乱数生成とパスワードの生成
-   */
-  for (i = 0; i < str_length; i++)
-  {
-    for (j = 0; j < 2; j++)
-    {
-      k = i * 2 + j;
-      do
-      {
-        rnd = rand();
-        password[k] = str[i] + rnd;
-      } while (!isalnum(password[k]));
-    }
-  }
-
-  /*
-   * NULL文字の挿入
-   */
-  password[password_length] = '\0';
-
-  /*
-   * パスワードの出力
-   */
-  //    printf("生成パスワード：%s",password);
-
-  return;
+  t = state->x ^ (a << 11);
+  state->y = state->z;
+  state->z = state->w;
+  return (state->w = (state->w ^ (state->w >> 19)) ^ (t ^ (t >> 8)));
 }
 
 int mlt(int x, int y)
@@ -453,26 +398,6 @@ int mlt2(int n, int x)
 
   return i;
 }
-
-unsigned short tabloog[N] = {0};
-unsigned short tabloof[N] = {0};
-
-int mktbl()
-{
-  int i, j;
-
-  j = 2;
-  tabloog[0] = 0;
-  tabloog[1] = 1;
-  tabloof[0] = 0;
-  tabloof[1] = 1;
-  for (i = 1; i < N; i = i * 2)
-  {
-    tabloog[j] = gf[i];
-    tabloof[j++] = fg[i];
-  }
-}
-
 
 int mltn(int n, int x) {
     int ret = 1;
@@ -533,8 +458,6 @@ static const unsigned char inv_s_box[256] = {
 void rp2(unsigned char *a)
 {
   int i, j, x;
-  time_t t;
-
   //  srand(clock() + time(&t));
 
   for (i = 0; i < K; i++)
@@ -590,7 +513,6 @@ chash()
   unsigned char x1[K] = {0};
   unsigned char tmp[K] = {0};
   unsigned short u = 0;
-  time_t t;
 
   rp2(x0);
   rp2(x1);

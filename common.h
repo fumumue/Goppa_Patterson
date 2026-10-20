@@ -17,7 +17,7 @@
 
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof((array)[0]))
 
-unsigned long xor128(void);
+unsigned long xor128(RNG *state);
 int mlt(int x, int y);
 int mltn(int n, int x);
 void gen_gf(int deg, int order, int opt_sage);
@@ -26,9 +26,16 @@ void print_trace(void);
 
 vec o2v(OP f);
 OP v2o(vec a);
-vec pubkeygen(void);
-vec zin(unsigned short zz[]);
+void Pgen(unsigned short permutation[N]);
+vec pubkeygen(unsigned short permutation[N],
+              MTX *inverse_scrambler,
+              RNG *rng,
+              unsigned short syndrome_matrix[N][K]);
+vec zin(const MTX *inverse_scrambler,
+        const unsigned short syndrome_matrix[N][K],
+        unsigned short zz[]);
 vec patterson(vec w, vec f);
+int ero2(vec v, const unsigned short permutation[N]);
 void printpol(vec a);
 vec vadd(vec a, vec b);
 vec vmul(vec a, vec b);
@@ -36,10 +43,7 @@ vec fmul(vec a, vec b);
 OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
 
-extern MTX inv_S;
-extern MTX S;
-
-int is_reg(const MTX *cc, MTX *R);
+int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int mkS(const MTX *cc, MTX *R);
 int mkRS(const MTX *cc, MTX *R);
 int binv(const MTX *cc, MTX *L, int Y);

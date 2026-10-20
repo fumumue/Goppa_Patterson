@@ -95,7 +95,7 @@ MTX gauss(const MTX *input)
   MTX a = *input;
   int i, j, k, buf = 0;
   unsigned short ff = 0, inv_a[F][F] = {0};
-  static MTX TT = {0}, b;
+  MTX TT = {0}, b = {0};
   b = a;
   // unsigned short a[F][F]={0};
   //\92P\88ʍs\97\F1\82\F0\8D\EC\82\E9
@@ -171,7 +171,7 @@ MTX matinv(const MTX *input, int n)
   int i, j, k, count; //カウンタ
   // MTX a={0};
   unsigned short c[N][N] = {0};
-  static MTX z = {0};
+  MTX z = {0};
   unsigned short cc[N][N] = {0};
 
 lab:
@@ -326,7 +326,7 @@ lab:
 MTX mulmat(const MTX *A, const MTX *B, int flg)
 {
   int i, j, k;
-  static MTX tmp = {0};
+  MTX tmp = {0};
 
   if (flg == 1)
   {
@@ -383,7 +383,7 @@ MTX mulmat(const MTX *A, const MTX *B, int flg)
 void mmul(const MTX *A, const MTX *B)
 {
   int i, j, k;
-  static MTX tmp = {0};
+  MTX tmp = {0};
 
   for (i = 0; i < A->b.col; i++)
   {

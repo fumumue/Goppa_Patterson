@@ -19,8 +19,5 @@
 
 extern unsigned short gf[GF_TABLE_SIZE];
 extern unsigned short fg[GF_TABLE_SIZE];
-extern unsigned short P[N];
-extern unsigned short inv_P[N];
-extern unsigned short uu;
 
 #endif
