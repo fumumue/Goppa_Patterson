@@ -12,41 +12,56 @@
 
 extern void makeS();
 
-void random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
+int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
 {
   // Keep an incremental row-echelon basis so dependent candidates can be discarded.
   unsigned char basis[F][F] = {0};
   bool has_pivot[F] = {false};
   unsigned char candidate[F];
   int accepted = 0;
+  const int max_candidates_per_row = 1024;
 
   memset(matrix->x, 0, sizeof(matrix->x));
   while (accepted < F)
   {
-    for (int col = 0; col < F; col++)
-    {
-      candidate[col] = (unsigned char)(xor128(rng) & 1UL);
-      matrix->x[accepted][col] = candidate[col];
-    }
+    bool independent = false;
 
-    for (int pivot = 0; pivot < F; pivot++)
+    for (int attempt = 0; attempt < max_candidates_per_row && !independent; attempt++)
     {
-      if (candidate[pivot] == 0)
-        continue;
-
-      if (has_pivot[pivot])
+      for (int col = 0; col < F; col++)
       {
-        for (int col = pivot; col < F; col++)
-          candidate[col] ^= basis[pivot][col];
-        continue;
+        candidate[col] = (unsigned char)(xor128(rng) & 1UL);
+        matrix->x[accepted][col] = candidate[col];
       }
 
-      memcpy(basis[pivot], candidate, sizeof(candidate));
-      has_pivot[pivot] = true;
-      accepted++;
-      break;
+      for (int pivot = 0; pivot < F; pivot++)
+      {
+        if (candidate[pivot] == 0)
+          continue;
+
+        if (has_pivot[pivot])
+        {
+          for (int col = pivot; col < F; col++)
+            candidate[col] ^= basis[pivot][col];
+          continue;
+        }
+
+        memcpy(basis[pivot], candidate, sizeof(candidate));
+        has_pivot[pivot] = true;
+        accepted++;
+        independent = true;
+        break;
+      }
+    }
+
+    if (!independent)
+    {
+      memset(matrix->x, 0, sizeof(matrix->x));
+      return -1;
     }
   }
+
+  return 0;
 }
 
 int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
@@ -55,19 +70,11 @@ int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
 
   int i, j, k, l;
   unsigned char b[K * E][K * E] = {0};
-  unsigned char dd[K * E] = {0};
   unsigned int flg = 0, count = 0;
   unsigned char cl[K * E][K * E];
   time_t t;
-  FILE *fq;
   unsigned char inv_a[K * E][K * E] = {0}; //ここに逆行列が入る
-  unsigned char buf;                       //一時的なデータを蓄える
-  int n = K * E;                           //配列の次数
-  MTX O = {0};
 
-  while (flg != F)
-  {
-  labo:
     // memset(cc,0,sizeof(cc));
     flg = 0;
     count = 0;
@@ -83,7 +90,6 @@ int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
       {
         // printf("%d,",cc.x[i][j]);
         cl[i][j] = cc.x[i][j];
-        dd[j] = cc.x[i][j];
       }
       // printf("\n");
     }
@@ -108,13 +114,13 @@ int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
       {
         j = i;
 
-        while (cc.x[j][i] == 0 && j < F)
+        while (j < F && cc.x[j][i] == 0)
         {
           j++;
         }
 
         //#pragma omp parallel for
-        if (j > F)
+        if (j >= F)
         {
           printf("S is not reg in is_reg %d\n", j);
           // exit(1);
@@ -225,9 +231,6 @@ int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
     }
     // O.reg= -1;
     return -1;
-  }
-
-  return -1;
 }
 
 int mkS(const MTX *cc_input, MTX *R)
@@ -235,21 +238,14 @@ int mkS(const MTX *cc_input, MTX *R)
   MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[X][X] = {0};
-  unsigned char dd[X] = {0};
   unsigned int flg = 0, count = 0;
   // unsigned char cc.x[X][X] = {0};
   unsigned char cl[X][X];
   time_t t;
-  FILE *fq;
   unsigned char inv_a[X][X] = {0}; //ここに逆行列が入る
-  unsigned char buf;               //一時的なデータを蓄える
-  int n = K * E;                   //配列の次数
 
   // while(flg!=F || count!=F*F-F)
   // while(count!=F*F-F)
-  while (flg != X)
-  {
-  labo:
     // memset(cc,0,sizeof(cc));
     flg = 0;
     count = 0;
@@ -274,7 +270,6 @@ int mkS(const MTX *cc_input, MTX *R)
       {
         // printf("%d,",cc.x[i][j]);
         cl[i][j] = cc.x[i][j];
-        dd[j] = cc.x[i][j];
       }
       // printf("\n");
     }
@@ -305,7 +300,7 @@ int mkS(const MTX *cc_input, MTX *R)
   //printf("i=%d\n",i);
   */
 
-        while (cc.x[j][i] == 0 && j < X)
+        while (j < X && cc.x[j][i] == 0)
         {
           j++;
           // buf=cc.x[j++][i];
@@ -429,7 +424,6 @@ int mkS(const MTX *cc_input, MTX *R)
         for (j = 0; j < X; j++)
         {
           //
-          dd[j] = cl[i][j];
           printf("%d,", cl[i][j]);
         }
 
@@ -443,7 +437,6 @@ int mkS(const MTX *cc_input, MTX *R)
         // printf("{");
         for (j = 0; j < X; j++)
         {
-          dd[j] = inv_a[i][j];
           R->x[i][j] = inv_a[i][j];
           // printf("%d,", inv_S.w[i][j]);
         }
@@ -463,8 +456,6 @@ int mkS(const MTX *cc_input, MTX *R)
       return 0;
     }
     return -1;
-  }
-  return -1;
 }
 
 int mkRS(const MTX *cc_input, MTX *R)
@@ -472,21 +463,14 @@ int mkRS(const MTX *cc_input, MTX *R)
   MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[AY][AY] = {0};
-  unsigned char dd[AY] = {0};
   unsigned int flg = 0, count = 0;
   // unsigned char cc.x[X][X] = {0};
   unsigned char cl[AY][AY];
   time_t t;
-  FILE *fq;
   unsigned char inv_a[AY][AY] = {0}; //ここに逆行列が入る
-  unsigned char buf;                 //一時的なデータを蓄える
-  int n = K * E;                     //配列の次数
 
   // while(flg!=F || count!=F*F-F)
   // while(count!=F*F-F)
-  while (flg != AY)
-  {
-  labo:
     // memset(cc,0,sizeof(cc));
     flg = 0;
     count = 0;
@@ -511,7 +495,6 @@ int mkRS(const MTX *cc_input, MTX *R)
       {
         // printf("%d,",cc.x[i][j]);
         cl[i][j] = cc.x[i][j];
-        dd[j] = cc.x[i][j];
       }
       // printf("\n");
     }
@@ -542,7 +525,7 @@ int mkRS(const MTX *cc_input, MTX *R)
   //printf("i=%d\n",i);
   */
 
-        while (cc.x[j][i] == 0 && j < AY)
+        while (j < AY && cc.x[j][i] == 0)
         {
           j++;
           // buf=cc.x[j++][i];
@@ -666,7 +649,6 @@ int mkRS(const MTX *cc_input, MTX *R)
         for (j = 0; j < AY; j++)
         {
           //
-          dd[j] = cl[i][j];
           printf("%d,", cl[i][j]);
         }
 
@@ -680,7 +662,6 @@ int mkRS(const MTX *cc_input, MTX *R)
         // printf("{");
         for (j = 0; j < AY; j++)
         {
-          dd[j] = inv_a[i][j];
           R->x[i][j] = inv_a[i][j];
           // printf("%d,", inv_S.w[i][j]);
         }
@@ -700,8 +681,6 @@ int mkRS(const MTX *cc_input, MTX *R)
       return 0;
     }
     return -1;
-  }
-  return -1;
 }
 
 int binv(const MTX *cc_input, MTX *L, int Y)
@@ -709,21 +688,14 @@ int binv(const MTX *cc_input, MTX *L, int Y)
   MTX cc = *cc_input;
   int i, j, k, l;
   unsigned char b[N][N] = {0};
-  unsigned char dd[N] = {0};
   unsigned int flg = 0, count = 0;
   // unsigned char cc.x[X][X] = {0};
   unsigned char cl[N][N];
   time_t t;
-  FILE *fq;
   unsigned char inv_a[N][N] = {0}; //ここに逆行列が入る
-  unsigned char buf;               //一時的なデータを蓄える
-  int n = K * E;                   //配列の次数
 
   // while(flg!=F || count!=F*F-F)
   // while(count!=F*F-F)
-  while (flg != Y)
-  {
-  labo:
     // memset(cc,0,sizeof(cc));
     flg = 0;
     count = 0;
@@ -748,7 +720,6 @@ int binv(const MTX *cc_input, MTX *L, int Y)
       {
         // printf("%d,",cc.x[i][j]);
         cl[i][j] = cc.x[i][j];
-        dd[j] = cc.x[i][j];
       }
       // printf("\n");
     }
@@ -779,7 +750,7 @@ int binv(const MTX *cc_input, MTX *L, int Y)
   //printf("i=%d\n",i);
   */
 
-        while (cc.x[j][i] == 0 && j < Y)
+        while (j < Y && cc.x[j][i] == 0)
         {
           j++;
           // buf=cc.x[j++][i];
@@ -903,7 +874,6 @@ int binv(const MTX *cc_input, MTX *L, int Y)
         for (j = 0; j < Y; j++)
         {
           //
-          dd[j] = cl[i][j];
           printf("%d,", cl[i][j]);
         }
 
@@ -917,7 +887,6 @@ int binv(const MTX *cc_input, MTX *L, int Y)
         // printf("{");
         for (j = 0; j < Y; j++)
         {
-          dd[j] = inv_a[i][j];
           L->x[i][j] = inv_a[i][j];
           // printf("%d,", inv_S.w[i][j]);
         }
@@ -937,7 +906,6 @@ int binv(const MTX *cc_input, MTX *L, int Y)
       return 0;
     }
     return -1;
-  }
 
   /*
   fq=fopen("S.key","wb");

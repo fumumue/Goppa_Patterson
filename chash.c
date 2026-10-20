@@ -57,11 +57,9 @@ void printArray(const int *array, size_t size)
 
 void mkcycle()
 {
-  int i, j, r, rr, vv, pko, flg, flg2, l, n, ll, jj, flg3, cnt2, v, cnt3 = 0, ii;
-  unsigned short cnt, k, count = 0, kk, count2 = 0;
+  int i, j, pko, flg2, l, n, ll, cnt3 = 0, ii;
+  unsigned short cnt, k, count = 0, kk;
   int x[5][NN] = {0};
-  ;
-  unsigned long long int o;
 
   // p は素数表
   //{2,13,17};
@@ -83,7 +81,6 @@ a3:
 
     cnt = 0;
 
-    count2 = 0;
     for (i = 0; i < NN; i++)
       x[j][i] = -1;
 
@@ -94,7 +91,6 @@ a3:
     for (i = 0; i < MAX; i++)
     {
       count = 0;
-      flg = 0;
 
       while (count < p[i])
       {
@@ -123,7 +119,6 @@ a3:
 
           pko = kk;
           // printf("pko=%d\n",kk);
-          flg = 1;
         }
 
         if (x[j][kk] == -1)
@@ -512,7 +507,6 @@ chash()
   unsigned char inv_x[K] = {0};
   unsigned char x1[K] = {0};
   unsigned char tmp[K] = {0};
-  unsigned short u = 0;
 
   rp2(x0);
   rp2(x1);
@@ -549,7 +543,6 @@ chash()
     count++;
   }
 
-  int uu = 0;
   for (i = 0; i < K; i++)
   {
     // vw.x[0] ^= key[i];

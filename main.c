@@ -1,6 +1,5 @@
 #include "common.h"
 
-void mkerr(unsigned short *z1, int num, RNG *rng);
 unsigned short oinv(unsigned short a);
 unsigned short oinv2(unsigned short a);
 
@@ -26,27 +25,23 @@ int main(void)
 
   w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
-  while (1)
+  memset(z1, 0, sizeof(z1));
+  if (mkerr(z1, K, &rng) != 0)
+    return EXIT_FAILURE;
+
+  f = zin(&inverse_scrambler, syndrome_matrix, z1);
+  printpol(f);
+  printf(" ==syndrome\n");
+
+  v = patterson(w, f);
+
+  if (ero2(v, permutation) < 0)
   {
-    memset(z1, 0, sizeof(z1));
-    mkerr(z1, K, &rng);
-
-    f = zin(&inverse_scrambler, syndrome_matrix, z1);
-    printpol(f);
-    printf(" ==syndrome\n");
-
-    v = patterson(w, f);
-
-    if (ero2(v, permutation) < 0)
+    for (int i = 0; i < N; i++)
     {
-      for (int i = 0; i < N; i++)
-      {
-        if (z1[i] > 0)
-          printf("i=%d\n", i);
-      }
+      if (z1[i] > 0)
+        printf("i=%d\n", i);
     }
-
-    break;
   }
 
   return 0;

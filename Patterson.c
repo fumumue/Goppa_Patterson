@@ -100,7 +100,8 @@ void wait(void)
   int a;                                     // 読み込む変数はローカルに取るべし
   printf(" (enter number and hit return) "); // 何か表示させたほうが良いだろう
   fflush(stdout);                            // just in case
-  scanf("%d", &a);                           // fgets(line, LINESIZE, stdin); という手も
+  if (scanf("%d", &a) != 1)
+    fprintf(stderr, "Failed to read wait input.\n");
 }
 
 // OP型を正規化する
@@ -177,7 +178,7 @@ int deg(vec a)
 // 多項式の次数(degのOP型)
 int odeg(OP f)
 {
-  int i, j = 0, k;
+  int i, j = 0;
 
   if (f.t[0].a == 0)
     return 0;
@@ -409,13 +410,12 @@ OP add(OP f, OP g)
   //  vec a={0},b={0},c={0};
   unsigned long long int i, j, n1 = 0, n2 = 0, m1 = 0, count = 0;
   OP h = {0};
-  oterm o1 = {0}, o2 = {
-                      0};
+  oterm o1 = {0}, o2 = {0};
 
   n1 = terms(f);
-  printf("n1=%d\n", n1);
+  printf("n1=%llu\n", n1);
   n2 = terms(g);
-  printf("n2=%d\n", n2);
+  printf("n2=%llu\n", n2);
   if (n1 > n2)
   {
   }
@@ -428,7 +428,7 @@ OP add(OP f, OP g)
   o2 = oLT(g);
   printf("LTadd==%d %d\n", o1.n, o2.n);
   m1 = n1 + n2;
-  printf("m1=%d\n", m1);
+  printf("m1=%llu\n", m1);
   // exit(1);
 
   for (i = 0; i < n1 + 1; i++)
@@ -440,7 +440,7 @@ OP add(OP f, OP g)
         o1 = oLT(f);
         o2 = oLT(g);
         printf("LT==%d %d\n", o1.n, o2.n);
-        printf("f.n==%d %d %d %d\n", f.t[i].n, g.t[j].n, i, j);
+        printf("f.n==%u %u %llu %llu\n", f.t[i].n, g.t[j].n, i, j);
         f.t[i].a = 0;
         g.t[j].a = 0;
       }
@@ -478,14 +478,11 @@ OP oterml(OP f, oterm t)
 {
   f = conv(f);
   assert(op_verify(f));
-  int i, k, j;
+  int i;
   OP h = {0};
-  vec test;
-  unsigned int n;
 
   // f=conv(f);
   // k = deg (o2v(f));
-  j = 0;
   for (i = 0; i < DEG; i++)
   {
     h.t[i].n = f.t[i].n + t.n;
@@ -504,10 +501,9 @@ OP omul(OP f, OP g)
   g = conv(g);
   assert(op_verify(f));
   assert(op_verify(g));
-  int i, count = 0, k, l;
+  int i, k, l;
   oterm t = {0};
-  OP h = {0}, e = {0}, r = {0};
-  vec c = {0};
+  OP h = {0}, e = {0};
 
   k = odeg(f);
   l = odeg(g);
@@ -529,7 +525,7 @@ OP omul(OP f, OP g)
 // リーディグタームを抽出(default)
 oterm LT(OP f)
 {
-  int i, k;
+  int i;
   oterm t = {0};
 
   // k = deg (o2v (f));
@@ -549,7 +545,6 @@ oterm LT(OP f)
 // 多項式の最後の項を抽出
 oterm LT2(OP f)
 {
-  int i, k;
   oterm t = {0};
 
   t.n = f.t[0].n;
@@ -593,8 +588,7 @@ oterm LTdiv(OP f, oterm t)
 // モニック多項式にする
 OP coeff(OP f, unsigned short d)
 {
-  int i, j, k;
-  vec a, b;
+  int i, k;
 
   f = conv(f);
   k = odeg((f)) + 1;
@@ -612,7 +606,7 @@ void printpol(vec a)
   n = deg(a);
 
   // printf ("baka\n");
-  assert(("baka\n", n >= 0));
+  assert(n >= 0);
 
   for (i = n; i > -1; i--)
   {
@@ -638,9 +632,9 @@ OP odiv(OP f, OP g)
   g = conv(g);
   assert(op_verify(f));
   assert(op_verify(g));
-  int i = 0, j, n, k;
-  OP h = {0}, e = {0}, tt = {0};
-  oterm a, b = {0}, c = {0};
+  int i = 0;
+  OP h = {0}, tt = {0};
+  oterm b = {0}, c = {0};
 
   if (LT(f).n == 0 && LT(g).a == 0)
   {
@@ -656,7 +650,6 @@ OP odiv(OP f, OP g)
   if (LT(g).n == 0 && LT(g).a > 1)
     return coeff(f, LT(g).a);
 
-  k = odeg(g);
   b = LT(g);
   if (b.a == 1 && b.n == 0)
     return f;
@@ -721,10 +714,8 @@ OP opow(OP f, int n)
 // 多項式の剰余を取る
 OP omod(OP f, OP g)
 {
-  int i = 0, j, n, k;
-  OP h = {0}, e = {
-                  0};
-  oterm a, b = {0}, c = {0};
+  OP h = {0};
+  oterm b = {0}, c = {0};
 
   // n = LT(g).n;
 
@@ -741,7 +732,6 @@ OP omod(OP f, OP g)
   // printf ("in omod\n");
   // exit(1);
 
-  k = LT(g).n;
   b = LT(g);
   // printpol(o2v(g));
   // printf("d %d\n",LT(g).n);
@@ -769,7 +759,7 @@ OP omod(OP f, OP g)
 // 多項式のべき乗余
 OP opowmod(OP f, OP mod, int n)
 {
-  int i = 1, j = 0, l;
+  int i = 1;
 
   // printpol(o2v(mod));
   // printf(" =mod %d\n",LT(mod).n);
@@ -804,8 +794,7 @@ trace(OP f, unsigned short x)
 OP inv(OP a, OP n)
 {
   OP d = {0}, x = {0}, s = {0}, q = {0}, r = {0}, t = {0}, u = {0}, v = {0}, w = {0}, tt = {0}, gcd = {0}, tmp = {0};
-  oterm b = {0};
-  vec vv = {0}, xx = {0}, aa = {0}, bb = {0}, cc = {0};
+  vec aa = {0}, bb = {0}, cc = {0};
 
   if (odeg((a)) > odeg((n)))
   {
@@ -872,7 +861,6 @@ OP inv(OP a, OP n)
   printf("before odiv\n");
   // w=tt;
 
-  b = LT(w);
   ////printpol (o2v (w));
   // printf ("\nw=======%d %d\n", b.a, b.n);
   // w=tt;
@@ -922,7 +910,7 @@ OP inv(OP a, OP n)
 unsigned short
 v2a(oterm a)
 {
-  int i, j;
+  int j;
 
   if (a.a == 0)
     return 0;
@@ -936,11 +924,13 @@ v2a(oterm a)
       return j - 1;
     }
   }
+  fprintf(stderr, "Field element %u is not present in the field table.\n", a.a);
+  exit(EXIT_FAILURE);
 }
 
 void printsage(vec a)
 {
-  int i, j, k;
+  int i, j;
   oterm b;
 
   printf("poly=");
@@ -961,10 +951,7 @@ void printsage(vec a)
 // gcd for patterson
 OP zgcd(OP a, OP n, int P)
 {
-  OP d = {0}, x = {0}, s = {0}, q = {0}, r = {0}, t = {0}, u = {0}, v = {0}, w = {0}, tt = {0}, gcd = {0}, rt = {0};
-  oterm b = {0};
-  vec vv = {0}, xx = {
-                    0};
+  OP d = {0}, x = {0}, s = {0}, q = {0}, r = {0}, t = {0}, rt = {0};
 
   if (odeg(a) > odeg(n))
   {
@@ -979,8 +966,6 @@ OP zgcd(OP a, OP n, int P)
     printf(" a ga 0\n");
     exit(1);
   }
-
-  tt = n;
 
   d = n;
   x.t[0].a = 0;
@@ -1006,7 +991,6 @@ OP zgcd(OP a, OP n, int P)
 
   x = s;
   s = t;
-  gcd = d; // $\gcd(a, n)$
 
   printpol(o2v(x));
   printf(" =======x\n");
@@ -1165,12 +1149,11 @@ int ben_or(OP f)
   if (n == 0)
     return -1;
 
-  OP t[K]={0};
 #pragma omp parallel num_threads(omp_get_max_threads())
   {
 #pragma omp for schedule(static)
     for (i = 0; i < n / 2 + 1; i++)
-      t[i] = bib(i, d, ww);
+      (void)bib(i, d, ww);
   }
 
   return 0;
@@ -1243,7 +1226,7 @@ void Pgen(unsigned short permutation[N])
 // 有限体の元の平方を計算する
 int isqrt(unsigned short u)
 {
-  int i, j, k;
+  int i;
 
   for (i = 0; i < N; i++)
   {
@@ -1258,10 +1241,8 @@ int isqrt(unsigned short u)
 // 多項式の平方を計算する
 OP osqrt(OP f, OP w)
 {
-  int i, j, k, jj, n, flg = 0;
-  OP even = {0}, odd = {0}, h = {0}, r = {0}, ww = {0}, s = {0}, tmp = {0}, t = {0};
-  oterm o = {0};
-  vec v = {0};
+  int i, j, k, jj;
+  OP even = {0}, odd = {0}, h = {0}, r = {0}, ww = {0}, s = {0}, tmp = {0};
 
   j = 0;
   jj = 0;
@@ -1279,7 +1260,6 @@ OP osqrt(OP f, OP w)
       odd.t[jj].n = (f.t[i].n - 1) / 2;
       odd.t[jj++].a = gf[isqrt(f.t[i].a)];
       printf(" odd %d\n", i);
-      flg = 1;
     }
   }
 
@@ -1426,20 +1406,16 @@ OP osqrt(OP f, OP w)
 vec patterson(vec w_vec, vec f_vec)
 {
   OP w = v2o(w_vec), f = v2o(f_vec);
-  OP g1 = {0}, ll = {0}, op = {0};
-  int i, j, k, l, c, n, count = 0, flg2 = 0;
-  int flg, o1 = 0;
+  OP g1 = {0}, ll = {0};
+  int flg2 = 0;
   OP tt = {0}, ff = {0}, h = {0};
-  EX hh = {0}, opp = {0};
   vec v;
-  oterm rr = {0};
   OP r2 = {0}, b2 = {
                    0};
   // unsigned short g[K+1]={2,2,12,1,2,8,4,13,5,10,8,2,15,10,7,3,5};
 
   tt.t[0].n = 1;
   tt.t[0].a = 1;
-  o1 = 0;
 
   ff = inv(f, w);
   //  //printpol (o2v (ff));
@@ -1462,7 +1438,7 @@ vec patterson(vec w_vec, vec f_vec)
   printf(" sqrt(h+x)=======\n");
   b2 = omod(omul(g1, g1), w);
   printpol(o2v(b2));
-  printf(" g1*g1%w===========\n");
+  printf(" g1*g1%%w===========\n");
   if (deg(o2v(b2)) == 0)
   {
     printf("b2 is 0\n");
@@ -1524,7 +1500,6 @@ vec patterson(vec w_vec, vec f_vec)
   printf(" =========ppo\n");
   // if(LT(ppo).a!=LT(ppo).a)
   // exit(1);
-  flg = 0;
   printpol(o2v(ppo));
   printf(" =========ppo\n");
   ff = omod(omul(ppo, g1), w);
@@ -1558,7 +1533,6 @@ vec patterson(vec w_vec, vec f_vec)
 
     printf("\nbefore h.d\n");
     ff = omod(omul(ppo, g1), w);
-    flg = 1;
     printpol(o2v(ff));
     printf(" ==========beta!\n");
     printpol(o2v(ppo));
@@ -1580,7 +1554,6 @@ vec patterson(vec w_vec, vec f_vec)
   }
 
   printf("あっ、でる・・・！\n");
-  count = 0;
   printpol(o2v(ll));
   printf(" ll=================\n");
   printpol(o2v(f));
@@ -1876,16 +1849,15 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
-static OP mkg(unsigned short matrix[N][K * E])
+static int mkg(unsigned short matrix[N][K * E], OP *result)
 {
-  int i, j, k, l, ii = 0;
-  OP w = {0}, f;
+  int i, j, k, l;
+  OP w = {0};
   unsigned short tr[N] = {0};
   unsigned short ta[N] = {0};
   unsigned short ma[N][K * E] = {0};
   unsigned short powers[K * 2][N] = {0};
   unsigned short polynomial_table[K * 2][K * 2] = {0};
-  unsigned short g1[3] = {1, 1, 3};
 
   // w=setpol(g,K+1);
   // printpol(o2v(w));
@@ -1893,49 +1865,46 @@ static OP mkg(unsigned short matrix[N][K * E])
   // exit(1);
   // w=omul(f,f);
 
-  j = 0;
-aa:
-
-  // printf("\n");
-
   // 既約性判定のためのBen-Orアルゴリズム。拡大体にも対応している。デフォルトでGF(8192)
   // 既約多項式しか使わない。
 
-  ii = 0;
-  l = -1;
+  const int max_polynomial_attempts = 10000;
+  bool found_valid_polynomial = false;
   vec pp = {0}, tt = {0};
 
-  
-          while (l < 0)
-          {
-              for (i = 0; i < K; i++)
-                  pp.x[i] = rand() % N;
-              mykey(tt.x, pp);
-              tt.x[K] = 1;
-              l = ben_or(v2o(tt));
-              if (l == 0)
-              {
-                  printf("\n");
-                  printsage(tt);
-                  printf(" ==irr\n");
-                 //exit(1);
-              }
-          }
-          //w = v2o(tt);
-  
-  w = setpol(tt.x,K+1);
-
-  // 多項式の値が0でないことを確認
-  for (i = 0; i < N; i++)
+  for (int attempt = 0; attempt < max_polynomial_attempts; attempt++)
   {
-    ta[i] = trace(w, i);
-    if (ta[i] == 0)
+    memset(pp.x, 0, sizeof(pp.x));
+    memset(tt.x, 0, sizeof(tt.x));
+    for (i = 0; i < K; i++)
+      pp.x[i] = rand() % N;
+    mykey(tt.x, pp);
+    tt.x[K] = 1;
+    l = ben_or(v2o(tt));
+    if (l < 0)
+      continue;
+
+    w = setpol(tt.x, K + 1);
+    found_valid_polynomial = true;
+    for (i = 0; i < N; i++)
     {
-      printf("trace 0 @ %d\n", i);
-      // fail = 1;
-      goto aa;
-      //exit(1);
+      ta[i] = trace(w, i);
+      if (ta[i] == 0)
+      {
+        printf("trace 0 @ %d\n", i);
+        found_valid_polynomial = false;
+        break;
+      }
     }
+    if (found_valid_polynomial)
+      break;
+  }
+
+  if (!found_valid_polynomial)
+  {
+    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n",
+            max_polynomial_attempts);
+    return -1;
   }
   for (i = 0; i < N; i++)
   {
@@ -2011,7 +1980,8 @@ aa:
   // exit(1);
   // wait();
 
-  return w;
+  *result = w;
+  return 0;
 }
 
 // Niederreiter暗号の公開鍵を作る
@@ -2020,7 +1990,7 @@ vec pubkeygen(unsigned short permutation[N],
               RNG *rng,
               unsigned short syndrome_matrix[N][K])
 {
-  int i, j, k, l;
+  int i, j;
   FILE *fp;
   unsigned short field_matrix[N][K * E] = {0};
   MTX check_matrix = {0}, scrambler = {0}, public_matrix = {0};
@@ -2028,7 +1998,8 @@ vec pubkeygen(unsigned short permutation[N],
   OP w = {0};
   vec v = {0};
 
-  w = mkg(field_matrix);
+  if (mkg(field_matrix, &w) != 0)
+    exit(EXIT_FAILURE);
   printpol(o2v(w));
   printf(" ==goppa polynomial\n");
 
@@ -2047,7 +2018,11 @@ vec pubkeygen(unsigned short permutation[N],
   Pgen(permutation);
   fp = fopen("P.key", "w");
   fclose(fp);
-  random_full_rank_binary_matrix(&scrambler, rng);
+  if (random_full_rank_binary_matrix(&scrambler, rng) != 0)
+  {
+    fprintf(stderr, "failed to generate a full-rank scrambler matrix\n");
+    exit(EXIT_FAILURE);
+  }
   if (is_reg(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
@@ -2093,7 +2068,7 @@ vec pubkeygen(unsigned short permutation[N],
 
 static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
 {
-  int i, j, k;
+  int i, j;
   vec v = {0};
   OP s = {0};
   unsigned ch[K * E] = {0};
@@ -2138,7 +2113,7 @@ static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
 
 int ero2(vec v, const unsigned short permutation[N])
 {
-  int i, j, count = 0;
+  int i, count = 0;
   unsigned short ya[N] = {0}, xa[N] = {0};
 
   for (i = 0; i < T * 2; i++)
@@ -2182,7 +2157,6 @@ int ero2(vec v, const unsigned short permutation[N])
       //
       // exit (1);
     }
-    int cnt = 0;
     /*
       for (k = 0; k < N; k++)
       {
@@ -2248,28 +2222,44 @@ int ero2(vec v, const unsigned short permutation[N])
   return count;
 }
 
-void mkerr(unsigned short *z1, int num, RNG *rng)
+int mkerr(unsigned short *z1, int num, RNG *rng)
 {
-  int i, j, l;
-  j = 0;
+  unsigned short positions[N];
+  int available = 0;
 
-  while (j < num)
+  if (num < 0 || num > N)
   {
-    l = xor128(rng) % N;
-    // printf ("l=%d\n", l);
-    if (0 == z1[l])
-    {
-      z1[l] = 1;
-      printf("l=%d %d\n", l, j);
-      j++;
-    }
+    fprintf(stderr, "invalid error weight: %d (expected 0..%d)\n", num, N);
+    return -1;
   }
 
-  for (i = 0; i < N; i++)
+  for (int i = 0; i < N; i++)
+  {
+    if (z1[i] == 0)
+      positions[available++] = (unsigned short)i;
+  }
+  if (num > available)
+  {
+    fprintf(stderr, "cannot add %d errors; only %d zero positions remain\n", num, available);
+    return -1;
+  }
+
+  for (int i = 0; i < num; i++)
+  {
+    int selected = i + (int)(xor128(rng) % (unsigned long)(available - i));
+    unsigned short position = positions[selected];
+    positions[selected] = positions[i];
+    positions[i] = position;
+    z1[position] = 1;
+    printf("l=%u %d\n", position, i);
+  }
+
+  for (int i = 0; i < N; i++)
   {
     if (z1[i] > 0)
       printf("%d=%d\n", i, z1[i]);
   }
+  return 0;
 }
 
 vec zin(const MTX *inverse_scrambler,
@@ -2278,7 +2268,6 @@ vec zin(const MTX *inverse_scrambler,
 {
   int i, j;
   OP s = {0};
-  vec v = {0};
   unsigned short ss[K] = {0};
 
   for (i = 0; i < N; i++)

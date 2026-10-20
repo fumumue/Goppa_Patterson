@@ -25,13 +25,18 @@ int main(void)
   unsigned short xor16[67], xor16_expected[67], xor16_mod2[67], xor16_mod2_expected[67];
   uint8_t xor8[67], xor8_expected[67];
   MTX full_rank_matrix = {0};
+  MTX singular_matrix = {0}, inverse_matrix = {0};
   unsigned short rank_rows[DEG][DEG] = {0};
   RNG rng = {123456789, 362436069, 521288629, 88675123};
   OP f, h;
   int failed = 0;
 
   gen_gf(E, N, 1);
-  random_full_rank_binary_matrix(&full_rank_matrix, &rng);
+  if (random_full_rank_binary_matrix(&full_rank_matrix, &rng) != 0)
+  {
+    fprintf(stderr, "full-rank matrix generation failed\n");
+    return 1;
+  }
 
   for (int i = 0; i < DEG; i++)
   {
@@ -75,6 +80,43 @@ int main(void)
   {
     fprintf(stderr, "generated binary matrix rank: expected %d, got %d\n", DEG, rank);
     failed = 1;
+  }
+  if (is_reg(&singular_matrix, &inverse_matrix, &rng) == 0)
+  {
+    fprintf(stderr, "is_reg accepted a singular matrix\n");
+    failed = 1;
+  }
+
+  unsigned short invalid_error[N] = {0};
+  if (mkerr(invalid_error, N + 1, &rng) == 0)
+  {
+    fprintf(stderr, "mkerr accepted an impossible error weight\n");
+    failed = 1;
+  }
+  invalid_error[0] = 1;
+  if (mkerr(invalid_error, N, &rng) == 0)
+  {
+    fprintf(stderr, "mkerr accepted an impossible additional error weight\n");
+    failed = 1;
+  }
+
+  unsigned short generated_errors[N] = {0};
+  RNG zero_rng = {0};
+  if (mkerr(generated_errors, K, &zero_rng) != 0)
+  {
+    fprintf(stderr, "mkerr failed with a zero-initialized RNG state\n");
+    failed = 1;
+  }
+  else
+  {
+    int error_weight = 0;
+    for (int i = 0; i < N; i++)
+      error_weight += generated_errors[i] != 0;
+    if (error_weight != K)
+    {
+      fprintf(stderr, "generated error weight: expected %d, got %d\n", K, error_weight);
+      failed = 1;
+    }
   }
 
   for (int i = 0; i < 67; i++)

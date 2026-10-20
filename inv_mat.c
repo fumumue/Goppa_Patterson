@@ -167,12 +167,11 @@ MTX matinv(const MTX *input, int n)
   // unsigned short a[F][F];     //={{1,2,0,1},{1,1,2,0},{2,0,1,1},{1,2,1,1}}; //入力用の配列
   unsigned short inv_a[N][N]; //ここに逆行列が入る
   unsigned short buf;         //一時的なデータを蓄える
-  unsigned short b[N][N] = {0}, dd[N][N] = {0};
+  unsigned short b[N][N] = {0};
   int i, j, k, count; //カウンタ
   // MTX a={0};
   unsigned short c[N][N] = {0};
   MTX z = {0};
-  unsigned short cc[N][N] = {0};
 
 lab:
   memset(b, 0, sizeof(b));
@@ -405,16 +404,12 @@ void matmul()
 {
   int i, j, k, tmp[N][N] = {0};
   unsigned short x0[N]; //={1,2,3,4,5,6,7,0};
-  unsigned short x1[N]; //={2,3,1,6,5,7,0,4};
-  unsigned short x2[N] = {0};
-  unsigned short c[N][N] = {0};
 
   unsigned short a[N][N] = {0}; //{{0,3,0,0,},{0,0,4,0},{0,0,0,5},{6,0,0,0}};
   //{{0,1,0,0},{0,0,1,0},{0,0,0,1},{1,0,0,0}};
   unsigned short inv_a[N][N] = {0};
   //{{0,0,0,1},{1,0,0,0},{0,1,0,0},{0,0,1,0}};
   //={{1,2,0,1},{1,1,2,0},{2,0,1,1},{1,2,1,1}}; //入力用の配列
-  unsigned short cc[N][N] = {0};
 for(i=0;i<N;i++)
 x0[i]=i;
 random_shuffle(x0,SIZE_OF_ARRAY(x0));
