@@ -24,9 +24,6 @@ void gen_gf(int deg, int order, int opt_sage);
 void random_shuffle(unsigned short *array, size_t size);
 void print_trace(void);
 
-vec o2v(OP f);
-OP v2o(vec a);
-OP conv(OP f);
 void Pgen(unsigned short permutation[N]);
 vec pubkeygen(unsigned short permutation[N],
               MTX *inverse_scrambler,
@@ -41,8 +38,11 @@ void printpol(vec a);
 vec vadd(vec a, vec b);
 vec vmul(vec a, vec b);
 vec fmul(vec a, vec b);
-OP oadd(OP f, OP g);
-OP omul(OP f, OP g);
+vec poly_add(vec f, vec g);
+vec poly_mul(vec f, vec g);
+vec poly_div(vec f, vec g);
+vec poly_mod(vec f, vec g);
+vec poly_inverse(vec f, vec modulus);
 
 int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng);

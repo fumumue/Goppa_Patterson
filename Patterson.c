@@ -59,41 +59,6 @@ equ(unsigned short a, unsigned short b)
   return i;
 }
 
-// OP型からベクトル型への変換
-vec o2v(OP f)
-{
-  vec a = {0};
-  int i;
-
-  // #pragma omp parallel for
-  for (i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a > 0 && f.t[i].n < DEG)
-      a.x[f.t[i].n] = f.t[i].a;
-  }
-
-  return a;
-}
-
-// ベクトル型からOP型への変換
-OP v2o(vec a)
-{
-  int i, j = 0;
-  OP f = {0};
-
-  // #pragma omp parallel for
-  for (i = 0; i < DEG; i++)
-  {
-    if (a.x[i] > 0)
-    {
-      f.t[j].n = i;
-      f.t[j++].a = a.x[i];
-    }
-  }
-
-  return f;
-}
-
 // 停止コマンド
 void wait(void)
 {
@@ -103,56 +68,6 @@ void wait(void)
   if (scanf("%d", &a) != 1)
     fprintf(stderr, "Failed to read wait input.\n");
 }
-
-// OP型を正規化する
-OP conv(OP f)
-{
-  int i;
-  int previous_degree = -1;
-  bool has_ended = false;
-
-  for (i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a == 0)
-    {
-      has_ended = true;
-      if (f.t[i].n != 0)
-        break;
-      continue;
-    }
-
-    if (has_ended || f.t[i].n >= DEG || f.t[i].n <= previous_degree)
-      break;
-
-    previous_degree = f.t[i].n;
-  }
-
-  if (i == DEG)
-    return f;
-
-  vec v = {0};
-  OP g = {0};
-
-  v = o2v(f);
-  g = v2o(v);
-
-  return g;
-}
-
-// 項の数
-int terms(OP f)
-{
-  int i, count = 0;
-
-  for (i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a > 0)
-      count++;
-  }
-
-  return count;
-}
-
 
 // 多項式の次数(default)
 int deg(vec a)
@@ -175,110 +90,11 @@ int deg(vec a)
 }
 
 
-// 多項式の次数(degのOP型)
-int odeg(OP f)
-{
-  int i, j = 0;
-
-  if (f.t[0].a == 0)
-    return 0;
-
-  // k=terms(f);
-  for (i = 0; i < DEG; i++)
-  {
-    if (j < f.t[i].n && f.t[i].a > 0)
-      j = f.t[i].n;
-  }
-
-  return j;
-}
-
-
-// 多項式を表示する（OP型）
-void oprintpol(OP f)
-{
-  int i, n;
-
-  f = conv(f);
-  n = odeg(f);
-  printf("n=%d\n", n);
-  // printf("terms=%d\n", terms(f));
-  printf("deg=%d\n", odeg(f));
-
-  for (i = n; i > -1; i--)
-  {
-    if (f.t[i].a > 0)
-      printf("%ux^%u+", f.t[i].a, f.t[i].n);
-  }
-}
-
-void op_print_raw(const OP f)
-{
-  puts("op_print_raw:");
-  for (int i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a > 0)
-      printf("[%d] %ux^%u\n", i, f.t[i].a, f.t[i].n);
-  }
-}
-
-bool op_verify(const OP f)
-{
-  bool end = false;
-  unsigned short n_max = 0;
-  for (int i = 0; i < DEG; i++)
-  {
-    if (end && (f.t[i].n != 0 || f.t[i].a != 0))
-    {
-      op_print_raw(f);
-      printf("found data after end: i=%d\n", i);
-      print_trace();
-      fflush(stdout);
-      return false;
-    }
-    if (f.t[i].a == 0)
-    {
-      end = true;
-      continue;
-    }
-    if (f.t[i].n + 1 <= n_max)
-    {
-      op_print_raw(f);
-      printf("found invalid order: i=%d\n", i);
-      print_trace();
-      fflush(stdout);
-      return false;
-    }
-    n_max = f.t[i].n + 1;
-  }
-  return true;
-}
-
-OP norm(OP f)
-{
-  OP h = {0};
-  int i;
-  for (i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a > 0)
-    {
-      //      h.t[f.t[i].n].n=f.t[i].n;
-      h.t[f.t[i].n].a = f.t[i].a;
-    }
-  }
-
-  // exit(1);
-
-  return h;
-}
-
 vec vadd(vec a, vec b)
 {
   vec c = {0};
-  size_t len = (size_t)((deg(a) > deg(b) ? deg(a) : deg(b)) + 1);
-
-  xor_u16(c.x, a.x, len);
-  xor_u16(c.x, b.x, len);
+  xor_u16(c.x, a.x, DEG);
+  xor_u16(c.x, b.x, DEG);
 
   return c;
 }
@@ -325,276 +141,51 @@ vec fmul(vec a, vec b)
   return c;
 }
 
-// 20200816:正規化したいところだがうまく行かない
-// 多項式の足し算
-OP oadd(OP f, OP g)
+static int poly_degree(vec f)
 {
-  vec a = {0}, b = {0};
-  OP h;
+  for (int i = DEG - 1; i >= 0; i--)
+    if (f.x[i] != 0)
+      return i;
+  return -1;
+}
 
+static unsigned short leading_coefficient(vec f)
+{
+  int degree = poly_degree(f);
+  return degree >= 0 ? f.x[degree] : 0;
+}
+
+static unsigned short lowest_coefficient(vec f)
+{
   for (int i = 0; i < DEG; i++)
-  {
-    if (f.t[i].a > 0 && f.t[i].n < DEG)
-      a.x[f.t[i].n] = f.t[i].a;
-    if (g.t[i].a > 0 && g.t[i].n < DEG)
-      b.x[g.t[i].n] = g.t[i].a;
-  }
+    if (f.x[i] != 0)
+      return f.x[i];
+  return 0;
+}
 
+vec poly_add(vec f, vec g)
+{
+  return vadd(f, g);
+}
+
+vec poly_mul(vec f, vec g)
+{
+  return fmul(f, g);
+}
+
+static vec coeff(vec f, unsigned short divisor)
+{
+  unsigned short inverse;
+
+  if (divisor == 0)
+  {
+    fprintf(stderr, "cannot normalize a polynomial by zero\n");
+    exit(EXIT_FAILURE);
+  }
+  inverse = oinv(divisor);
   for (int i = 0; i < DEG; i++)
-    a.x[i] ^= b.x[i];
-
-  h = v2o(a);
-  assert(op_verify(h));
-  return h;
-}
-
-// 項の順序を降順に揃える
-OP sort(OP f)
-{
-  oterm o = {0};
-  int i, j, k;
-
-  k = terms(f);
-  for (i = 0; i < k + 1; ++i)
-  {
-    for (j = i + 1; j < k + 1; ++j)
-    {
-      if (f.t[i].n > f.t[j].n)
-      {
-        o = f.t[i];
-        f.t[i] = f.t[j];
-        f.t[j] = o;
-      }
-    }
-  }
-
-  return f;
-}
-
-// リーディングタームを抽出(OP型）
-oterm oLT(OP f)
-{
-  int i, k, j;
-  oterm s = {0};
-
-  k = terms(f);
-  s = f.t[0];
-  for (i = 0; i < k + 1; i++)
-  {
-    // printf("a=%d %d\n",f.t[i].a,f.t[i].n);
-    if (f.t[i].a > 0)
-    {
-      printf("in LT=%d %d\n", s.a, s.n);
-      for (j = i; j < k + 1; j++)
-      {
-        if (s.n < f.t[j].n)
-        {
-          s.n = f.t[j].n;
-          s.a = f.t[j].a;
-        }
-
-        //  else{
-        // t=s;
-        // }
-      }
-    }
-  }
-  //  exit(1);
-
-  return s;
-}
-
-// 多項式を足し算する（OP型）
-OP add(OP f, OP g)
-{
-  //  vec a={0},b={0},c={0};
-  unsigned long long int i, j, n1 = 0, n2 = 0, m1 = 0, count = 0;
-  OP h = {0};
-  oterm o1 = {0}, o2 = {0};
-
-  n1 = terms(f);
-  printf("n1=%llu\n", n1);
-  n2 = terms(g);
-  printf("n2=%llu\n", n2);
-  if (n1 > n2)
-  {
-  }
-
-  oprintpol(f);
-  printf(" fff==============\n");
-  oprintpol(g);
-  printf(" ggg==============\n");
-  o1 = oLT(f);
-  o2 = oLT(g);
-  printf("LTadd==%d %d\n", o1.n, o2.n);
-  m1 = n1 + n2;
-  printf("m1=%llu\n", m1);
-  // exit(1);
-
-  for (i = 0; i < n1 + 1; i++)
-  {
-    for (j = 0; j < n2 + 1; j++)
-    {
-      if (f.t[i].n == g.t[j].n && g.t[j].a > 0 && f.t[i].a > 0)
-      {
-        o1 = oLT(f);
-        o2 = oLT(g);
-        printf("LT==%d %d\n", o1.n, o2.n);
-        printf("f.n==%u %u %llu %llu\n", f.t[i].n, g.t[j].n, i, j);
-        f.t[i].a = 0;
-        g.t[j].a = 0;
-      }
-    }
-  }
-  for (i = 0; i < n2 + 1; i++)
-  {
-    if (g.t[i].a > 0)
-    {
-      h.t[count++] = g.t[i];
-      g.t[i].a = 0;
-    }
-  }
-  for (i = 0; i < n1 + 1; i++)
-  {
-    if (f.t[i].a > 0)
-    {
-      h.t[count++] = f.t[i];
-      f.t[i].a = 0;
-    }
-  }
-
-  h = sort(h);
-  h = conv(h);
-  if (odeg(h) > 0)
-    oprintpol(h);
-  printf(" addh==============\n");
-  //   exit(1);
-
-  return h;
-}
-
-// 多項式を項ずつ掛ける
-OP oterml(OP f, oterm t)
-{
-  f = conv(f);
-  assert(op_verify(f));
-  int i;
-  OP h = {0};
-
-  // f=conv(f);
-  // k = deg (o2v(f));
-  for (i = 0; i < DEG; i++)
-  {
-    h.t[i].n = f.t[i].n + t.n;
-    h.t[i].a = gf[mlt(fg[f.t[i].a], fg[t.a])];
-  }
-
-  h = conv(h);
-  assert(op_verify(h));
-  return h;
-}
-
-// 多項式の掛け算
-OP omul(OP f, OP g)
-{
-  f = conv(f);
-  g = conv(g);
-  assert(op_verify(f));
-  assert(op_verify(g));
-  int i, k, l;
-  oterm t = {0};
-  OP h = {0}, e = {0};
-
-  k = odeg(f);
-  l = odeg(g);
-  if (l > k)
-  {
-    k = l;
-  }
-
-  for (i = 0; i < k + 1; i++)
-  {
-    t = g.t[i];
-    e = oterml(f, t);
-    h = oadd(h, e);
-  }
-  assert(op_verify(h));
-  return h;
-}
-
-// リーディグタームを抽出(default)
-oterm LT(OP f)
-{
-  int i;
-  oterm t = {0};
-
-  // k = deg (o2v (f));
-  for (i = 0; i < DEG; i++)
-  {
-    // printf("a=%d %d\n",f.t[i].a,f.t[i].n);
-    if (f.t[i].a > 0)
-    {
-      t.n = f.t[i].n;
-      t.a = f.t[i].a;
-    }
-  }
-
-  return t;
-}
-
-// 多項式の最後の項を抽出
-oterm LT2(OP f)
-{
-  oterm t = {0};
-
-  t.n = f.t[0].n;
-  t.a = f.t[0].a;
-
-  return t;
-}
-
-// 多項式を単行式で割る
-oterm LTdiv(OP f, oterm t)
-{
-  oterm tt = {0}, s = {
-                      0};
-
-  tt = LT(f);
-  if (tt.n < t.n)
-  {
-    s.n = 0;
-    s.a = 0;
-  }
-  else if (tt.n == t.n)
-  {
-    s.n = 0;
-    s.a = equ(t.a, tt.a);
-  }
-  else if (tt.n > t.n)
-  {
-    s.n = tt.n - t.n;
-    s.a = equ(t.a, tt.a);
-    // printf("%u\n",s.a);
-  }
-  else if (t.n == 0 && t.a > 0)
-  {
-    s.a = gf[mlt(fg[tt.a], oinv(t.a))];
-    s.n = tt.n;
-  }
-
-  return s;
-}
-
-// モニック多項式にする
-OP coeff(OP f, unsigned short d)
-{
-  int i, k;
-
-  f = conv(f);
-  k = odeg((f)) + 1;
-  for (i = 0; i < k; i++)
-    f.t[i].a = gf[mlt(fg[f.t[i].a], oinv(d))];
-
+    if (f.x[i] != 0)
+      f.x[i] = gf[mlt(fg[f.x[i]], fg[inverse])];
   return f;
 }
 
@@ -624,323 +215,116 @@ void printpol(vec a)
   return;
 }
 
-// 多項式の商を取る
-OP odiv(OP f, OP g)
+vec poly_div(vec f, vec g)
 {
+  vec quotient = {0};
+  int divisor_degree = poly_degree(g);
 
-  f = conv(f);
-  g = conv(g);
-  assert(op_verify(f));
-  assert(op_verify(g));
-  int i = 0;
-  OP h = {0}, tt = {0};
-  oterm b = {0}, c = {0};
-
-  if (LT(f).n == 0 && LT(g).a == 0)
+  if (divisor_degree < 0)
   {
-    printf("baka^\n");
-    // return f;
-    exit(1);
+    fprintf(stderr, "polynomial division by zero\n");
+    exit(EXIT_FAILURE);
   }
-  if (LT(g).a == 0)
+  while (poly_degree(f) >= divisor_degree)
   {
-    print_trace();
-    exit(1);
+    int degree = poly_degree(f);
+    int shift = degree - divisor_degree;
+    unsigned short factor = (unsigned short)equ(g.x[divisor_degree], f.x[degree]);
+    quotient.x[shift] ^= factor;
+    for (int i = 0; i <= divisor_degree; i++)
+      if (g.x[i] != 0)
+        f.x[i + shift] ^= gf[mlt(fg[factor], fg[g.x[i]])];
   }
-  if (LT(g).n == 0 && LT(g).a > 1)
-    return coeff(f, LT(g).a);
-
-  b = LT(g);
-  if (b.a == 1 && b.n == 0)
-    return f;
-  if (b.a == 0 && b.n == 0)
-  {
-    printf("baka in odiv\n");
-    exit(1);
-  }
-  if (odeg((f)) < odeg((g)))
-  {
-    return f;
-    //  a=LT(f);
-  }
-
-  i = 0;
-  while (LT(f).n > 0 && LT(g).n > 0)
-  {
-    c = LTdiv(f, b);
-    assert(c.n < DEG);
-    tt.t[i] = c;
-    i++;
-
-    h = oterml(g, c);
-
-    f = oadd(f, h);
-    if (odeg((f)) == 0 || odeg((g)) == 0)
-    {
-      // printf ("blake2\n");
-      break;
-    }
-
-    if (c.n == 0)
-      break;
-  }
-
-  // tt は逆順に入ってるので入れ替える
-  OP ret = {0};
-  int tt_terms = terms(tt);
-  for (i = 0; i < tt_terms; i++)
-  {
-    ret.t[i] = tt.t[tt_terms - i - 1];
-  }
-  ret = conv(ret);
-  assert(op_verify(ret));
-  return ret;
+  return quotient;
 }
 
-// 多項式のべき乗
-OP opow(OP f, int n)
+vec poly_mod(vec f, vec g)
 {
-  int i;
-  OP g = {0};
+  int divisor_degree = poly_degree(g);
 
-  g = f;
-
-  for (i = 1; i < n; i++)
-    g = omul(g, f);
-
-  return g;
-}
-
-// 多項式の剰余を取る
-OP omod(OP f, OP g)
-{
-  OP h = {0};
-  oterm b = {0}, c = {0};
-
-  // n = LT(g).n;
-
-  //  assert (("baka^\n", LT (f).n != 0));
-
-  //  assert (("baka(A)\n", LT (g).n != 0));
-
-  if (LT(f).n < LT(g).n)
+  if (divisor_degree < 0)
   {
-    //    exit(1);
-    return f;
+    fprintf(stderr, "polynomial modulo zero\n");
+    exit(EXIT_FAILURE);
   }
-
-  // printf ("in omod\n");
-  // exit(1);
-
-  b = LT(g);
-  // printpol(o2v(g));
-  // printf("d %d\n",LT(g).n);
-
-  // assert(("double baka\n", b.a != 0 && b.n != 0));
-  while (LT(f).n > 0 && LT(g).n > 0)
+  while (poly_degree(f) >= divisor_degree)
   {
-
-    c = LTdiv(f, b);
-    h = oterml(g, c);
-    f = oadd(f, h);
-    if (odeg((f)) == 0 || odeg((g)) == 0)
-    {
-      //      printf("blake1\n");
-      break;
-    }
-
-    if (c.n == 0 || b.n == 0)
-      break;
+    int degree = poly_degree(f);
+    int shift = degree - divisor_degree;
+    unsigned short factor = (unsigned short)equ(g.x[divisor_degree], f.x[degree]);
+    for (int i = 0; i <= divisor_degree; i++)
+      if (g.x[i] != 0)
+        f.x[i + shift] ^= gf[mlt(fg[factor], fg[g.x[i]])];
   }
-
   return f;
 }
 
-// 多項式のべき乗余
-OP opowmod(OP f, OP mod, int n)
+static unsigned short trace(vec f, unsigned short x)
 {
-  int i = 1;
+  unsigned short result = 0;
 
-  // printpol(o2v(mod));
-  // printf(" =mod %d\n",LT(mod).n);
-  // 繰り返し２乗法
-  while (i < n + 1)
-  {
-    f = omod(omul(f, f), mod);
-    i++;
-  }
-
-  return f;
+  for (int i = 0; i < DEG; i++)
+    if (f.x[i] != 0)
+      result ^= gf[mlt(fg[f.x[i]], mltn(i, fg[x]))];
+  return result;
 }
 
-// 多項式の代入値
-unsigned short
-trace(OP f, unsigned short x)
+vec poly_inverse(vec a, vec modulus)
 {
-  int i, d;
-  unsigned short u = 0;
+  vec r0 = modulus, r1 = a;
+  vec t0 = {0}, t1 = {0};
+  t1.x[0] = 1;
 
-  d = deg(o2v(f));
-
-  for (i = 0; i < d + 1; i++)
+  while (poly_degree(r1) >= 0)
   {
-    u ^= gf[mlt(fg[f.t[i].a], mltn(f.t[i].n, fg[x]))];
+    vec quotient = poly_div(r0, r1);
+    vec remainder = poly_mod(r0, r1);
+    vec next = poly_add(t0, poly_mul(quotient, t1));
+    r0 = r1;
+    r1 = remainder;
+    t0 = t1;
+    t1 = next;
   }
 
-  return u;
-}
-
-// invert of polynomial
-OP inv(OP a, OP n)
-{
-  OP d = {0}, x = {0}, s = {0}, q = {0}, r = {0}, t = {0}, u = {0}, v = {0}, w = {0}, tt = {0}, gcd = {0}, tmp = {0};
-  vec aa = {0}, bb = {0}, cc = {0};
-
-  if (odeg((a)) > odeg((n)))
+  if (poly_degree(r0) != 0)
   {
-    tmp = a;
-    a = n;
-    n = tmp;
-    printf("baka_i\n");
-    // exit (1);
+    fprintf(stderr, "polynomial has no inverse modulo the supplied modulus\n");
+    exit(EXIT_FAILURE);
   }
-  if (LT(a).a == 0)
-  {
-    printf(" a ga 0\n");
-    exit(1);
-  }
-
-  tt = n;
-
-  d = n;
-  x.t[0].a = 0;
-  x.t[0].n = 0;
-  s.t[0].a = 1;
-  s.t[0].n = 0;
-  while (odeg((a)) > 0)
-  {
-    if (odeg((a)) > 0)
-      r = omod(d, a);
-    if (LT(a).a == 0)
-      break;
-    if (LT(a).a > 0)
-      q = odiv(d, a);
-
-    d = a;
-    a = r;
-    t = oadd(x, omul(q, s));
-    ////printpol (o2v (a));
-    // printf ("\nin roop a==================%d\n", odeg ((a)));
-    // printf ("\n");
-
-    x = s;
-    s = t;
-  }
-  // exit(1);
-  //  if(LT(a).a>0){
-  d = a;
-  a = r;
-  ////printpol (o2v (a));
-  // printf ("\nin roop a|==================%d\n", odeg ((a)));
-  // printf ("\n");
-
-  x = s;
-  s = t;
-
-  ////printpol (o2v (d));
-  // printf ("\nout1================\n");
-  gcd = d; // $\gcd(a, n)$
-  printpol(o2v(gcd));
-  printf(" =========gcd\n");
-  // exit(1);
-  // printf ("\n");
-  ////printpol (o2v (n));
-  // printf ("\n");
-  // printf ("out2===============\n");
-
-  printf("before odiv\n");
-  // w=tt;
-
-  ////printpol (o2v (w));
-  // printf ("\nw=======%d %d\n", b.a, b.n);
-  // w=tt;
-  aa = o2v(x);
-  bb = o2v(n);
-  cc = vadd(aa, bb);
-  v = v2o(cc);
-  w = tt;
-  if (LT(v).n > 0 && LT(w).n > 0)
-  {
-    u = omod(v, w);
-  }
-  else
-  {
-    // printpol (o2v (v));
-    printf(" v===========\n");
-    // printpol (o2v (x));
-    printf(" x==0?\n");
-    // printpol (o2v (n));
-    printf(" n==0?\n");
-
-    exit(1);
-  }
-  // caution !!
-  if (LT(u).a > 0 && LT(d).a > 0)
-  {
-    u = odiv(u, d);
-  }
-
-  if (LT(u).a == 0 || LT(d).a == 0)
-  {
-    printf("inv div u or d==0\n");
-    // exit(1);
-  }
-  // u=coeff(u,d.t[0].a);
-  ////printpol (o2v (u));
-  // printf ("\nu==================\n");
-  if (LT(u).a == 0)
-  {
-    printf("no return at u==0\n");
-    exit(1);
-  }
-
-  return u;
+  return poly_mod(coeff(t0, r0.x[0]), modulus);
 }
 
 unsigned short
-v2a(oterm a)
+v2a(unsigned short a)
 {
   int j;
 
-  if (a.a == 0)
+  if (a == 0)
     return 0;
 
   // printf("aa=%d\n",a.a);
   for (j = 0; j < N; j++)
   {
-    if (gf[j] == a.a && a.a > 0)
+    if (gf[j] == a && a > 0)
     {
       // printf("j==%d\n",j);
       return j - 1;
     }
   }
-  fprintf(stderr, "Field element %u is not present in the field table.\n", a.a);
+  fprintf(stderr, "Field element %u is not present in the field table.\n", a);
   exit(EXIT_FAILURE);
 }
 
 void printsage(vec a)
 {
   int i, j;
-  oterm b;
 
   printf("poly=");
   for (i = 0; i < DEG; i++)
   {
     if (a.x[i] > 0)
     {
-      b.a = a.x[i];
-      b.n = i;
-      j = v2a(b);
+      j = v2a(a.x[i]);
       // printf("%d,==ba\n",b.a);
       // printf ("X**%d+", i); //for GF2
       printf("B('a^%d')*X**%d+", j, i); // for GF(2^m)
@@ -948,96 +332,37 @@ void printsage(vec a)
   }
 }
 
-// gcd for patterson
-OP zgcd(OP a, OP n, int P)
+static vec poly_gcd_bounded(vec a, vec n, int limit)
 {
-  OP d = {0}, x = {0}, s = {0}, q = {0}, r = {0}, t = {0}, rt = {0};
+  vec r0 = n, r1 = a;
+  vec t0 = {0}, t1 = {0};
+  t1.x[0] = 1;
 
-  if (odeg(a) > odeg(n))
+  while (poly_degree(r1) > limit)
   {
-    rt = a;
-    a = n;
-    n = rt;
-    printf("big is good\n");
-    // exit (1);
+    vec quotient = poly_div(r0, r1);
+    vec remainder = poly_mod(r0, r1);
+    vec next = poly_add(t0, poly_mul(quotient, t1));
+    r0 = r1;
+    r1 = remainder;
+    t0 = t1;
+    t1 = next;
   }
-  if (LT(a).a == 0)
-  {
-    printf(" a ga 0\n");
-    exit(1);
-  }
-
-  d = n;
-  x.t[0].a = 0;
-  x.t[0].n = 0;
-  s.t[0].a = 1;
-  s.t[0].n = 0;
-  while (LT(a).n > P)
-  {
-
-    r = omod(d, a);
-    q = odiv(d, a);
-
-    d = a;
-    a = r;
-    t = oadd(x, omul(q, s));
-
-    x = s;
-    s = t;
-  }
-
-  d = a;
-  a = r;
-
-  x = s;
-  s = t;
-
-  printpol(o2v(x));
-  printf(" =======x\n");
-  printpol(o2v(a));
-  printf(" =======a\n");
-  printpol(o2v(s));
-  printf(" =======s\n");
-  printpol(o2v(r));
-  printf(" =======r\n");
-
-  return x;
+  return t1;
 }
 
-// gcd
-OP gcd(OP xx, OP yy)
+static vec poly_gcd(vec a, vec b)
 {
-  OP tt = {0}, tmp, h = {0};
-
-  h.t[0].a = 1;
-  h.t[0].n = 0;
-  if (deg(o2v(xx)) < deg(o2v(yy)))
+  while (poly_degree(b) >= 0)
   {
-    tmp = xx;
-    xx = yy;
-    yy = tmp;
+    vec remainder = poly_mod(a, b);
+    a = b;
+    b = remainder;
   }
-  tt = omod(xx, yy);
-  while (odeg(tt) > 0)
-  {
-    xx = yy;
-    yy = tt;
-    if (odeg(yy) > 0)
-      tt = omod(xx, yy);
-    if (LT(tt).a == 0)
-      return yy;
-  }
-  if (LT(tt).a == 0)
-  {
-    return yy;
-  }
-  else
-  {
-    return h;
-  }
-  //  return yy;
+  if (poly_degree(a) < 0)
+    return a;
+  return coeff(a, a.x[poly_degree(a)]);
 }
-
 
 // 整数からベクトル型への変換
 vec i2v(unsigned short n)
@@ -1083,86 +408,31 @@ vec Setvec(const unsigned short coefficients[], int n)
   return v;
 }
 
-static OP bib(int i, OP d, const OP ww[T])
+static vec chen(vec f)
 {
-  int id, j;
+  vec errors = {0};
+  int count = 0;
 
-  OP t[T] = {0};
-  // omp_set_num_threads(omp_get_max_threads());
-  id = omp_get_thread_num();
-  t[id] = d;
-
-  // #pragma omp parallel for
-  for (j = 0; j < T; j++)
+  for (int x = 0; x < N; x++)
   {
-    // #pragma omp critical
-    if (i != j)
-    {
-      t[id] = omul(t[id], ww[j]);
-    }
+    unsigned short value = 0;
+    for (int i = 0; i < DEG; i++)
+      if (f.x[i] != 0)
+        value ^= gf[mlt(mltn(i, fg[x]), fg[f.x[i]])];
+    if (value == 0 && count < DEG)
+      errors.x[count++] = (unsigned short)x;
   }
-
-  return t[id];
+  return errors;
 }
 
-// chen探索
-vec chen(OP f)
+static int ben_or(vec f)
 {
-  vec e = {0};
-  int i, count = 0, n, x = 0;
-  unsigned short z;
-
-  n = odeg((f));
-  // exit(1);
-  // #pragma omp parallel for private(i)
-  for (x = 0; x < N; x++)
-  {
-    z = 0;
-    // #pragma omp parallel for reduction (^:z)
-    for (i = 0; i < n + 1; i++)
-    {
-      if (f.t[i].a > 0)
-        z ^= gf[mlt(mltn(f.t[i].n, fg[x]), fg[f.t[i].a])];
-    }
-    if (z == 0)
-    {
-      e.x[count] = x;
-      count++;
-      printf("x=%d\n", x);
-    }
-  }
-  printpol(e);
-  printf(" ==eee!\n");
-  // exit(1);
-
-  return e;
+  return poly_degree(f) < 0 ? -1 : 0;
 }
 
-// GF(2^m) then set m in this function.
-int ben_or(OP f)
+static vec setpol(unsigned short coefficients[], int n)
 {
-  int i, n;
-  OP d = {0};
-  OP ww[T] = {0};
-  n = deg(o2v(f));
-
-  if (n == 0)
-    return -1;
-
-#pragma omp parallel num_threads(omp_get_max_threads())
-  {
-#pragma omp for schedule(static)
-    for (i = 0; i < n / 2 + 1; i++)
-      (void)bib(i, d, ww);
-  }
-
-  return 0;
-}
-
-// 配列の値を係数として多項式に設定する
-OP setpol(unsigned short f[], int n)
-{
-  return v2o(Setvec(f, n));
+  return Setvec(coefficients, n);
 }
 
 // バイナリ型パリティチェック行列を生成する
@@ -1239,188 +509,114 @@ int isqrt(unsigned short u)
 }
 
 // 多項式の平方を計算する
-OP osqrt(OP f, OP w)
+static vec osqrt(vec f, vec w)
 {
-  int i, j, k, jj;
-  OP even = {0}, odd = {0}, h = {0}, r = {0}, ww = {0}, s = {0}, tmp = {0};
+  vec even = {0}, odd = {0}, h = {0}, r = {0}, ww = {0}, s = {0}, tmp = {0};
 
-  j = 0;
-  jj = 0;
-  k = deg(o2v(f));
-  for (i = 0; i < k + 1; i++)
+  for (int i = 0; i < DEG; i++)
   {
-    if (f.t[i].n % 2 == 0 && f.t[i].a > 0)
+    if (f.x[i] == 0)
+      continue;
+    if ((i & 1) == 0)
     {
-      even.t[j].n = f.t[i].n / 2;
-      even.t[j++].a = gf[isqrt(f.t[i].a)];
-      printf("a=%d %d\n", f.t[i].a, i);
+      even.x[i / 2] = gf[isqrt(f.x[i])];
     }
-    if (f.t[i].n % 2 == 1 && f.t[i].a > 0)
+    else
     {
-      odd.t[jj].n = (f.t[i].n - 1) / 2;
-      odd.t[jj++].a = gf[isqrt(f.t[i].a)];
-      printf(" odd %d\n", i);
+      odd.x[(i - 1) / 2] = gf[isqrt(f.x[i])];
     }
   }
 
-  k = deg(o2v(w));
-  // printf ("%d\n", k);
-  // exit(1);
-  j = 0;
-  jj = 0;
-  for (i = 0; i < k + 1; i++)
+  for (int i = 0; i < DEG; i++)
   {
-    if (w.t[i].n % 2 == 0 && w.t[i].a > 0)
-    {
-      h.t[j].a = gf[isqrt(w.t[i].a)];
-      h.t[j++].n = w.t[i].n / 2;
-      printf("h==%d %d\n", (w.t[i].n / 2), i);
-    }
-    if (w.t[i].n % 2 == 1 && w.t[i].a > 0)
-    {
-      r.t[jj].a = gf[isqrt(w.t[i].a)];
-      r.t[jj++].n = (w.t[i].n - 1) / 2;
-      printf("r=====%d %d\n", (w.t[i].n - 1) / 2, i);
-    }
+    if (w.x[i] == 0)
+      continue;
+    if ((i & 1) == 0)
+      h.x[i / 2] = gf[isqrt(w.x[i])];
+    else
+      r.x[(i - 1) / 2] = gf[isqrt(w.x[i])];
   }
-  printpol(o2v(r));
+
+  printpol(r);
   printf(" sqrt(g1)=======\n");
-
-  //  exit(1);
-  if (LT(r).n > 0)
+  if (poly_degree(r) > 0)
   {
-    s = inv(r, w);
+    s = poly_inverse(r, w);
   }
-  else if (LT(r).n == 0)
+  else if (poly_degree(r) <= 0)
   {
-    printpol(o2v(r));
+    printpol(r);
     printf(" deg(r)======0!\n");
-    printpol(o2v(w));
+    printpol(w);
     printf(" goppa======0\n");
-    printpol(o2v(f));
+    printpol(f);
     printf(" syn======0\n");
-    if (LT(r).a > 0)
+    if (leading_coefficient(r) > 0)
     {
-      s.t[0].a = gf[isqrt(LT(r).a)];
-      s.t[0].n = 0;
-      return omod(oadd(even, omul(coeff(h, s.t[0].a), odd)), w);
+      s.x[0] = gf[isqrt(leading_coefficient(r))];
+      return poly_mod(poly_add(even, poly_mul(coeff(h, s.x[0]), odd)), w);
     }
     return even;
-    // s = inv (r, w);
-    // wait ();
-    // exit (1);
-  }
-  if (deg(o2v(s)) > 0)
-    tmp = omod(omul(s, r), w);
-  if (odeg((tmp)) > 0)
-  {
-    // printpol (o2v (tmp));
-    printf(" r is not inv==========\n");
-    wait();
-    exit(1);
-  }
-  if (LT(h).n > 0 && odeg(s) > 0)
-  {
-    ww = omod(omul(h, s), w);
-  }
-  if (LT(h).n == 0 || odeg(s) == 0)
-  {
-    printpol(o2v(h));
-    printf(" h=========0\n");
-    exit(1);
   }
 
-  if (LT(ww).n == 0 && LT(ww).a == 0)
+  if (poly_degree(s) > 0)
+    tmp = poly_mod(poly_mul(s, r), w);
+  if (poly_degree(tmp) > 0)
   {
-    printpol(o2v(s));
-    printf(" s===========\n");
-    printsage(o2v(w));
-    printf(" w==============\n");
-    printpol(o2v(r));
-    printf(" r===========\n");
-    printpol(o2v(h));
-    printf(" h============\n");
-    printpol(o2v(ww));
-    printf(" ww==============\n");
-    printf(" wwが0になりました。error\n");
-    wait();
-    // return ww;;
-    exit(1);
+    fprintf(stderr, "square-root polynomial component is not invertible\n");
+    exit(EXIT_FAILURE);
+  }
+  if (poly_degree(h) > 0 && poly_degree(s) > 0)
+    ww = poly_mod(poly_mul(h, s), w);
+  if (poly_degree(h) <= 0 || poly_degree(s) <= 0)
+  {
+    printpol(h);
+    fprintf(stderr, "invalid polynomial square-root components\n");
+    exit(EXIT_FAILURE);
   }
 
-  tmp = omod(omul(ww, ww), w);
-  if (LT(tmp).n == 1)
+  if (poly_degree(ww) < 0)
   {
-    printpol(o2v(ww));
+    fprintf(stderr, "polynomial square-root component is zero\n");
+    exit(EXIT_FAILURE);
+  }
+
+  tmp = poly_mod(poly_mul(ww, ww), w);
+  if (poly_degree(tmp) == 1)
+  {
+    printpol(ww);
     printf(" ww succsess!===========\n");
   }
   else
   {
-    // printpol (o2v (tmp));
-    printf(" mod w^2==========\n");
-    // printpol (o2v (ww));
-    printf(" ww^2 failed!========\n");
-    printpol(o2v(s));
-    printf(" g1^-1==============\n");
-    // printpol (o2v (w));
-    printf(" w==============\n");
-    // printpol (o2v (h));
-    printf(" g0===========\n");
-    // printpol (o2v (r));
-    printf(" r===========\n");
-    printf("この鍵では逆元が計算できません。error");
-    wait();
-    // return ww;
-    exit(1);
+    fprintf(stderr, "polynomial square-root verification failed\n");
+    exit(EXIT_FAILURE);
   }
 
-  //    exit(1);
-  printpol(o2v(s));
-  printf(" g1^-1=========\n");
-  printpol(o2v(h));
-  printf(" g0=========\n");
-  // exit(1);
-  printpol(o2v(ww));
-  printf(" ww==========\n");
-  //  exit(1);
   h = ww;
-  if (odeg(omod(omul(h, ww), w)) == 1)
-  {
-    ww = h;
-    h = omod(oadd(even, omul(ww, odd)), w);
-    return h;
-  }
-  else if (LT(ww).a == 0)
-  {
-    printf("vaka\n");
-    exit(1);
-  }
-
-  // //printpol(o2v(ww));
-  printf(" 来ちゃだめなところに来ました\n");
-
-  exit(1);
+  if (poly_degree(poly_mod(poly_mul(h, ww), w)) == 1)
+    return poly_mod(poly_add(even, poly_mul(ww, odd)), w);
+  fprintf(stderr, "unexpected polynomial square-root result\n");
+  exit(EXIT_FAILURE);
 }
 
 // パターソンアルゴリズムでバイナリGoppa符号を復号する
 vec patterson(vec w_vec, vec f_vec)
 {
-  OP w = v2o(w_vec), f = v2o(f_vec);
-  OP g1 = {0}, ll = {0};
+  vec w = w_vec, f = f_vec;
+  vec g1 = {0}, ll = {0};
   int flg2 = 0;
-  OP tt = {0}, ff = {0}, h = {0};
+  vec tt = {0}, ff = {0}, h = {0};
   vec v;
-  OP r2 = {0}, b2 = {
+  vec r2 = {0}, b2 = {
                    0};
   // unsigned short g[K+1]={2,2,12,1,2,8,4,13,5,10,8,2,15,10,7,3,5};
 
-  tt.t[0].n = 1;
-  tt.t[0].a = 1;
+  tt.x[1] = 1;
 
-  ff = inv(f, w);
-  //  //printpol (o2v (ff));
-  b2 = omod(omul(ff, f), w);
-  if (odeg((b2)) > 0)
+  ff = poly_inverse(f, w);
+  b2 = poly_mod(poly_mul(ff, f), w);
+  if (poly_degree((b2)) > 0)
   {
     printf("逆元が計算できません。error\n");
     // wait ();
@@ -1428,57 +624,55 @@ vec patterson(vec w_vec, vec f_vec)
   }
   printf("locater==========\n");
   // exit(1);
-  r2 = oadd(ff, tt);
-  printpol(o2v(r2));
+  r2 = poly_add(ff, tt);
+  printpol(r2);
   printf(" h+x==============\n");
   // wait();
   //   exit(1);
   g1 = osqrt(r2, w);
-  printpol(o2v(g1));
+  printpol(g1);
   printf(" sqrt(h+x)=======\n");
-  b2 = omod(omul(g1, g1), w);
-  printpol(o2v(b2));
+  b2 = poly_mod(poly_mul(g1, g1), w);
+  printpol(b2);
   printf(" g1*g1%%w===========\n");
-  if (deg(o2v(b2)) == 0)
+  if (deg(b2) == 0)
   {
     printf("b2 is 0\n");
     exit(1);
   }
-  if (LT2(b2).a != LT2(r2).a)
+  if (lowest_coefficient(b2) != lowest_coefficient(r2))
   {
-    printpol(o2v(w));
+    printpol(w);
     printf(" w============\n");
-    printpol(o2v(r2));
+    printpol(r2);
     printf(" r2============\n");
-    printpol(o2v(g1));
+    printpol(g1);
     printf(" g1============\n");
     printf(" g1は平方ではありません。error");
     // wait ();
     exit(1);
   }
-  printpol(o2v(w));
+  printpol(w);
   printf(" ========goppa\n");
-  printpol(o2v(g1));
+  printpol(g1);
   printf(" g1!=========\n");
-  if (LT(g1).n == 0 && LT(g1).a == 0)
+  if (poly_degree(g1) < 0)
   {
-    // printpol (o2v (w));
     printf(" badkey=========\n");
-    // printpol (o2v (g1));
     printf(" g1============\n");
     printf("平方が０になりました。 error\n");
     // wait ();
     exit(1);
   }
-  h = gcd(f, w);
-  if (odeg((h)) > 0)
+  h = poly_gcd(f, w);
+  if (poly_degree((h)) > 0)
   {
-    printsage(o2v(w));
+    printsage(w);
     printf(" =goppa\n");
-    printsage(o2v(f));
+    printsage(f);
     printf(" =syn\n");
-    printpol(o2v(h));
-    printf(" =gcd\n");
+    printpol(h);
+    printf(" =poly_gcd\n");
 
     // printf("f-ben_or=%d\n",ben_or(f));
     // printf("w-ben_or=%d\n",ben_or(w));
@@ -1490,35 +684,35 @@ vec patterson(vec w_vec, vec f_vec)
   }
 
   // exit(1);
-  OP ppo = {0};
+  vec ppo = {0};
 
   // hh = xgcd(w, g1);
-  ppo = zgcd(w, g1, T);
-  printpol(o2v(ppo));
+  ppo = poly_gcd_bounded(w, g1, T);
+  printpol(ppo);
   printf(" =========ppo\n");
-  printpol(o2v(ppo));
+  printpol(ppo);
   printf(" =========ppo\n");
   // if(LT(ppo).a!=LT(ppo).a)
   // exit(1);
-  printpol(o2v(ppo));
+  printpol(ppo);
   printf(" =========ppo\n");
-  ff = omod(omul(ppo, g1), w);
-  printpol(o2v(ppo));
+  ff = poly_mod(poly_mul(ppo, g1), w);
+  printpol(ppo);
   printf(" alpha!=========\n");
-  printpol(o2v(ff));
+  printpol(ff);
   printf(" beta!=========\n");
-  printpol(o2v(w));
+  printpol(w);
   printf(" goppa=========\n");
-  printpol(o2v(f));
+  printpol(f);
   printf(" syn=========\n");
 
-  printpol(o2v(ppo));
+  printpol(ppo);
   printf(" alpha!=========\n");
   // hh = xgcd(w, g1);
-  ppo = zgcd(w, g1, T);
-  //  h=zgcd(w,g1);
-  ff = omod(omul(ppo, g1), w);
-  ll = oadd(omul(ff, ff), omul(tt, omul(ppo, ppo)));
+  ppo = poly_gcd_bounded(w, g1, T);
+  //  h=poly_gcd_bounded(w,g1);
+  ff = poly_mod(poly_mul(ppo, g1), w);
+  ll = poly_add(poly_mul(ff, ff), poly_mul(tt, poly_mul(ppo, ppo)));
   v = chen(ll);
   if (v.x[K - 1] > 0)
   {
@@ -1526,18 +720,18 @@ vec patterson(vec w_vec, vec f_vec)
     return v;
   }
 
-  ppo = zgcd(w, g1, T);
-  ff = omod(omul(ppo, g1), w);
-  if (odeg((ff)) != K / 2)
+  ppo = poly_gcd_bounded(w, g1, T);
+  ff = poly_mod(poly_mul(ppo, g1), w);
+  if (poly_degree((ff)) != K / 2)
   {
 
     printf("\nbefore h.d\n");
-    ff = omod(omul(ppo, g1), w);
-    printpol(o2v(ff));
+    ff = poly_mod(poly_mul(ppo, g1), w);
+    printpol(ff);
     printf(" ==========beta!\n");
-    printpol(o2v(ppo));
+    printpol(ppo);
     printf(" alpha!=========\n");
-    ll = oadd(omul(ff, ff), omul(tt, omul(ppo, ppo)));
+    ll = poly_add(poly_mul(ff, ff), poly_mul(tt, poly_mul(ppo, ppo)));
     v = chen(ll);
     if (v.x[K - 1] > 0)
     {
@@ -1546,17 +740,17 @@ vec patterson(vec w_vec, vec f_vec)
     }
   }
 
-  if (odeg((ff)) == 1)
+  if (poly_degree((ff)) == 1)
   {
-    ll = oadd(omul(ff, ff), omul(tt, omul(ppo, ppo))); // ff;
+    ll = poly_add(poly_mul(ff, ff), poly_mul(tt, poly_mul(ppo, ppo))); // ff;
     printf("deg==1\n");
     exit(1);
   }
 
   printf("あっ、でる・・・！\n");
-  printpol(o2v(ll));
+  printpol(ll);
   printf(" ll=================\n");
-  printpol(o2v(f));
+  printpol(f);
   printf(" syn=================\n");
   v = chen(ll);
 
@@ -1787,9 +981,9 @@ vec renritu(const MTX *input)
   }
   x.x[0] = 1;
 
-  OP pol = {0};
+  vec pol = {0};
   pol = setpol(x.x, K + 1);
-  printpol(o2v(pol));
+  printpol(pol);
   printf(" ==key\n");
   for (i = 0; i < N; i++)
   {
@@ -1849,10 +1043,10 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
-static int mkg(unsigned short matrix[N][K * E], OP *result)
+static int mkg(unsigned short matrix[N][K * E], vec *result)
 {
   int i, j, k, l;
-  OP w = {0};
+  vec w = {0};
   unsigned short tr[N] = {0};
   unsigned short ta[N] = {0};
   unsigned short ma[N][K * E] = {0};
@@ -1860,10 +1054,10 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
   unsigned short polynomial_table[K * 2][K * 2] = {0};
 
   // w=setpol(g,K+1);
-  // printpol(o2v(w));
+  // printpol(w);
   // printf("\n");
   // exit(1);
-  // w=omul(f,f);
+  // w=poly_mul(f,f);
 
   // 既約性判定のためのBen-Orアルゴリズム。拡大体にも対応している。デフォルトでGF(8192)
   // 既約多項式しか使わない。
@@ -1880,7 +1074,7 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
       pp.x[i] = rand() % N;
     mykey(tt.x, pp);
     tt.x[K] = 1;
-    l = ben_or(v2o(tt));
+    l = ben_or(tt);
     if (l < 0)
       continue;
 
@@ -1912,9 +1106,9 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
     // printf("%d,", tr[i]);
   }
 
-  printpol(o2v(w));
+  printpol(w);
   printf(" =irreducible\n");
-  printsage(o2v(w));
+  printsage(w);
   printf("\n");
   // j++;
   // if(j>100)
@@ -1924,7 +1118,7 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
   /*
   memset(ta, 0, sizeof(ta));
   w = setpol(g, K + 1);
-  printpol(o2v(w));
+  printpol(w);
   //printf(" =poly\n");
   for (i = 0; i < N; i++)
   {    ta[i] = trace(w, i);
@@ -1935,9 +1129,9 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
       break;
     }
   }
-  oprintpol(w);
+  printpol(w);
   printf("\n");
-  printsage(o2v(w));
+  printsage(w);
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
   */
@@ -1995,21 +1189,21 @@ vec pubkeygen(unsigned short permutation[N],
   unsigned short field_matrix[N][K * E] = {0};
   MTX check_matrix = {0}, scrambler = {0}, public_matrix = {0};
   MTX public_check_matrix = {0};
-  OP w = {0};
+  vec w = {0};
   vec v = {0};
 
   if (mkg(field_matrix, &w) != 0)
     exit(EXIT_FAILURE);
-  printpol(o2v(w));
+  printpol(w);
   printf(" ==goppa polynomial\n");
 
-  v = o2v(w);
+  v = w;
   //fp = fopen("sk.key", "wb");
   //fwrite(g, 2, K + 1, fp);
   //fclose(fp);
-  oprintpol(w);
+  printpol(w);
   printf("\n");
-  printsage(o2v(w));
+  printsage(w);
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
 
@@ -2066,11 +1260,11 @@ vec pubkeygen(unsigned short permutation[N],
   return v;
 }
 
-static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
+static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
 {
   int i, j;
   vec v = {0};
-  OP s = {0};
+  vec s = {0};
   unsigned ch[K * E] = {0};
   unsigned char h2o[K * E] = {0};
 
@@ -2135,13 +1329,13 @@ int ero2(vec v, const unsigned short permutation[N])
       printf("baka %d %d\n", i, v.x[i]);
       printf("v.x[K-1]=%d\n", v.x[K - 1]);
       /*
-        printpol(o2v(w));
+        printpol(w);
         printf(" ============goppa\n");
-        printsage(o2v(w));
+        printsage(w);
         printf(" ============sage\n");
-        printsage(o2v(f));
+        printsage(f);
         printf(" ============syn\n");
-        printpol(o2v(f));
+        printpol(f);
         printf(" ==========synd\n");
         printf("{");
         for (k = 0; k < N; k++)
@@ -2165,7 +1359,7 @@ int ero2(vec v, const unsigned short permutation[N])
           if (k != v.x[cnt])
           {
             printf("%d,%d\n", k, v.x[cnt]);
-            printsage(o2v(w));
+            printsage(w);
             printf(" ========w\n");
             break;
             //exit(1);
@@ -2204,13 +1398,13 @@ int ero2(vec v, const unsigned short permutation[N])
       for (i = 0; i < D; i++)
         printf("%d,", z1[i]);
       printf("};\n");
-      printpol(o2v(w));
+      printpol(w);
       printf(" =========goppa\n");
-      printsage(o2v(w));
+      printsage(w);
       printf(" =========sage\n");
-      printsage(o2v(f));
+      printsage(f);
       printf(" =========syn\n");
-      printpol(o2v(f));
+      printpol(f);
       printf(" ==========synd\n");
       */
     printf("へげえええーっ\n");
@@ -2267,7 +1461,7 @@ vec zin(const MTX *inverse_scrambler,
         unsigned short zz[])
 {
   int i, j;
-  OP s = {0};
+  vec s = {0};
   unsigned short ss[K] = {0};
 
   for (i = 0; i < N; i++)
@@ -2289,5 +1483,5 @@ vec zin(const MTX *inverse_scrambler,
   printf(" ==ss\n");
   // exit(1);
 
-  return o2v(s);
+  return s;
 }
