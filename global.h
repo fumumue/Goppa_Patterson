@@ -11,18 +11,27 @@
 #define N 256 // 符号長
 #define M N //有限体の元の数
 #define K (32) //符号の次元
-#define E (8)  //拡大体のビット数
+#define E (8)    //拡大体のビット数
 
-#if (K * E) > N
-#error "Unsupported parameter set: K * E must not exceed N. This implementation assumes K*E <= N and fixed-size matrices sized by N."
+/*
+ * This implementation is intentionally fixed-parameter.
+ * The original code hard-codes special-case reductions for a few K values
+ * and assumes K <= 32 with a K*E-sized check matrix.
+ */
+#if K > 32
+#error "Unsupported K: this build is only safe for K <= 32."
 #endif
 
-#if K != 32 && K != 64 && K != 96
-#error "Unsupported K. This implementation currently supports K = 32, 64, or 96 only."
+#if (K % 2) != 0
+#error "Unsupported K: use an even value for T = K / 2."
 #endif
 
-#define DEG (K * E) //(K * E)
-#define T (K / 2) //エラーの数
+#if ((K) * (E)) > N
+#error "Unsupported configuration: K * E must not exceed N."
+#endif
+
+#define DEG K*E //(K * E)
+#define T (K/2) //エラーの数
 
 #define GF_TABLE_SIZE 32768
 
