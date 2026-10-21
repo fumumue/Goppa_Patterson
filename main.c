@@ -46,12 +46,21 @@ static int verify_decode_result(vec decoded,
 
 int main(void)
 {
-  unsigned short z1[N] = {0}; //{1,0,1,1,1,0,0,0,0,0,1,1,1,0,0,1};
-  unsigned short permutation[N] = {0};
-  unsigned short syndrome_matrix[N][K] = {0};
+  unsigned short *z1 = calloc(N, sizeof(*z1));
+  unsigned short *permutation = malloc((size_t)N * sizeof(*permutation));
+  unsigned short (*syndrome_matrix)[K] = calloc(N, sizeof(*syndrome_matrix));
   MTX inverse_scrambler = {0};
   RNG rng = {123456789, 362436069, 521288629, 88675123};
   vec f = {0}, w = {0}, v = {0};
+
+  if (z1 == NULL || permutation == NULL || syndrome_matrix == NULL)
+  {
+    fprintf(stderr, "main: failed to allocate input/output buffers\n");
+    free(z1);
+    free(permutation);
+    free(syndrome_matrix);
+    return EXIT_FAILURE;
+  }
 
   srand(clock());
   if (K > N)
@@ -66,9 +75,15 @@ int main(void)
 
   w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
-  memset(z1, 0, sizeof(z1));
+  memset(z1, 0, (size_t)N * sizeof(*z1));
   if (mkerr(z1, K, &rng) != 0)
+  {
+    free(z1);
+    free(permutation);
+    free(syndrome_matrix);
+    matrix_free(&inverse_scrambler);
     return EXIT_FAILURE;
+  }
 
   f = zin(&inverse_scrambler, syndrome_matrix, z1);
   printpol(f);
@@ -96,5 +111,9 @@ int main(void)
     }
   }
 
+  matrix_free(&inverse_scrambler);
+  free(z1);
+  free(permutation);
+  free(syndrome_matrix);
   return decode_matches ? EXIT_SUCCESS : EXIT_FAILURE;
 }

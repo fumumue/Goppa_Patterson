@@ -501,23 +501,7 @@ OP omul(OP f, OP g)
   g = conv(g);
   assert(op_verify(f));
   assert(op_verify(g));
-  int i, k, l;
-  oterm t = {0};
-  OP h = {0}, e = {0};
-
-  k = odeg(f);
-  l = odeg(g);
-  if (l > k)
-  {
-    k = l;
-  }
-
-  for (i = 0; i < k + 1; i++)
-  {
-    t = g.t[i];
-    e = oterml(f, t);
-    h = oadd(h, e);
-  }
+  OP h = v2o(fmul(o2v(f), o2v(g)));
   assert(op_verify(h));
   return h;
 }
@@ -774,18 +758,14 @@ OP opowmod(OP f, OP mod, int n)
 }
 
 // 多項式の代入値
-unsigned short
-trace(OP f, unsigned short x)
+static unsigned short trace(vec f, unsigned short x)
 {
-  int i, d;
   unsigned short u = 0;
+  int degree = deg(f);
 
-  d = deg(o2v(f));
-
-  for (i = 0; i < d + 1; i++)
-  {
-    u ^= gf[mlt(fg[f.t[i].a], mltn(f.t[i].n, fg[x]))];
-  }
+  for (int i = 0; i <= degree; i++)
+    if (f.x[i] != 0)
+      u ^= gf[mlt(fg[f.x[i]], mltn(i, fg[x]))];
 
   return u;
 }
@@ -1085,12 +1065,9 @@ vec Setvec(const unsigned short coefficients[], int n)
 
 static OP bib(int i, OP d, const OP ww[T])
 {
-  int id, j;
+  int j;
 
-  OP t[T] = {0};
-  // omp_set_num_threads(omp_get_max_threads());
-  id = omp_get_thread_num();
-  t[id] = d;
+  OP t = d;
 
   // #pragma omp parallel for
   for (j = 0; j < T; j++)
@@ -1098,37 +1075,37 @@ static OP bib(int i, OP d, const OP ww[T])
     // #pragma omp critical
     if (i != j)
     {
-      t[id] = omul(t[id], ww[j]);
+      t = omul(t, ww[j]);
     }
   }
 
-  return t[id];
+  return t;
 }
 
 // chen探索
-vec chen(OP f)
+static vec chen(vec f)
 {
   vec e = {0};
-  int i, count = 0, n, x = 0;
+  int count = 0, n, x = 0;
   unsigned short z;
 
-  n = odeg((f));
+  n = deg(f);
   // exit(1);
   // #pragma omp parallel for private(i)
   for (x = 0; x < N; x++)
   {
     z = 0;
     // #pragma omp parallel for reduction (^:z)
-    for (i = 0; i < n + 1; i++)
-    {
-      if (f.t[i].a > 0)
-        z ^= gf[mlt(mltn(f.t[i].n, fg[x]), fg[f.t[i].a])];
-    }
+    for (int i = 0; i <= n; i++)
+      if (f.x[i] != 0)
+        z ^= gf[mlt(mltn(i, fg[x]), fg[f.x[i]])];
     if (z == 0)
     {
-      e.x[count] = x;
-      count++;
-      printf("x=%d\n", x);
+      if (count < DEG)
+      {
+        e.x[count++] = x;
+        printf("x=%d\n", x);
+      }
     }
   }
   printpol(e);
@@ -1143,11 +1120,19 @@ int ben_or(OP f)
 {
   int i, n;
   OP d = {0};
-  OP ww[T] = {0};
+  OP *ww = calloc(T, sizeof(*ww));
+  if (ww == NULL)
+  {
+    fprintf(stderr, "ben_or: failed to allocate polynomial workspace\n");
+    return -1;
+  }
   n = deg(o2v(f));
 
   if (n == 0)
+  {
+    free(ww);
     return -1;
+  }
 
 #pragma omp parallel num_threads(omp_get_max_threads())
   {
@@ -1156,6 +1141,7 @@ int ben_or(OP f)
       (void)bib(i, d, ww);
   }
 
+  free(ww);
   return 0;
 }
 
@@ -1166,9 +1152,16 @@ OP setpol(unsigned short f[], int n)
 }
 
 // バイナリ型パリティチェック行列を生成する
-static void bdet(const unsigned short matrix[N][K * E], MTX *check_matrix)
+static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
 {
   int i, j, k, l;
+
+  if (check_matrix->x == NULL || check_matrix->rows != N ||
+      check_matrix->cols != (size_t)(K * E))
+  {
+    fprintf(stderr, "invalid check-matrix storage\n");
+    exit(EXIT_FAILURE);
+  }
 
   for (i = 0; i < N; i++)
   {
@@ -1183,21 +1176,29 @@ static void bdet(const unsigned short matrix[N][K * E], MTX *check_matrix)
     }
   }
 
-  for (i = 0; i < N; i++)
-  {
-    for (j = 0; j < E * K; j++)
-      printf("%d,", check_matrix->x[i][j]);
-    printf("\n");
-  }
 }
 
-void toByte(const MTX *SH, unsigned short syndrome_matrix[N][K])
+static void toByte(const MTX *SH,
+                   const unsigned short permutation[N],
+                   unsigned short syndrome_matrix[N][K])
 {
   int i, j, k;
 
+  if (SH == NULL || SH->x == NULL || SH->rows < N ||
+      SH->cols < (size_t)(K * E) ||
+      permutation == NULL)
+  {
+    fprintf(stderr, "toByte: invalid matrix or permutation\n");
+    exit(EXIT_FAILURE);
+  }
+
   for (i = 0; i < N; i++)
   {
-    printf("数え上げ %d\n", i);
+    if (permutation[i] >= SH->rows)
+    {
+      fprintf(stderr, "toByte: permutation index is outside the matrix\n");
+      exit(EXIT_FAILURE);
+    }
     // #pragma omp parallel for
     for (j = 0; j < K; j++)
     {
@@ -1205,7 +1206,7 @@ void toByte(const MTX *SH, unsigned short syndrome_matrix[N][K])
         k = j * E;
         x=0;
         for (int l = 0; l < E; l++){
-          x ^= (SH->x[i][k + l]<<l);
+          x ^= (SH->x[permutation[i]][k + l] << l);
           }
         syndrome_matrix[i][j] = x;
     }
@@ -1519,7 +1520,7 @@ vec patterson(vec w_vec, vec f_vec)
   //  h=zgcd(w,g1);
   ff = omod(omul(ppo, g1), w);
   ll = oadd(omul(ff, ff), omul(tt, omul(ppo, ppo)));
-  v = chen(ll);
+  v = chen(o2v(ll));
   if (v.x[K - 1] > 0)
   {
     // wait ();
@@ -1538,7 +1539,7 @@ vec patterson(vec w_vec, vec f_vec)
     printpol(o2v(ppo));
     printf(" alpha!=========\n");
     ll = oadd(omul(ff, ff), omul(tt, omul(ppo, ppo)));
-    v = chen(ll);
+    v = chen(o2v(ll));
     if (v.x[K - 1] > 0)
     {
       wait();
@@ -1558,7 +1559,7 @@ vec patterson(vec w_vec, vec f_vec)
   printf(" ll=================\n");
   printpol(o2v(f));
   printf(" syn=================\n");
-  v = chen(ll);
+  v = chen(o2v(ll));
 
   if (v.x[K - 1] > 0)
   {
@@ -1742,8 +1743,15 @@ vec renritu(const MTX *input)
 {
   unsigned short p, d;
   int i, j, k;
-  MTX a = *input;
+  MTX a = {0};
   vec v = {0};
+
+  if (input == NULL || input->rows < (size_t)K ||
+      input->cols < (size_t)(K + 1) || matrix_copy(&a, input) != 0)
+  {
+    fprintf(stderr, "renritu: invalid or unavailable matrix storage\n");
+    return v;
+  }
 
   for (i = 0; i < K; i++)
   {
@@ -1787,9 +1795,8 @@ vec renritu(const MTX *input)
   }
   x.x[0] = 1;
 
-  OP pol = {0};
-  pol = setpol(x.x, K + 1);
-  printpol(o2v(pol));
+  vec pol = Setvec(x.x, K + 1);
+  printpol(pol);
   printf(" ==key\n");
   for (i = 0; i < N; i++)
   {
@@ -1797,6 +1804,7 @@ vec renritu(const MTX *input)
       printf("%d i=%d\n", i, fg[i] - 1);
   }
 
+  matrix_free(&a);
   return v;
 }
 
@@ -1805,9 +1813,17 @@ vec renritu(const MTX *input)
 /* return: 0 for success and -1 for failure */
 int mykey(unsigned short *out, vec x)
 {
-  unsigned short mat[K + 1][K] = {0};
+  unsigned short (*mat)[K] = calloc((size_t)K + 1, sizeof(*mat));
   MTX a = {0};
   int i, j;
+
+  if (out == NULL || mat == NULL || matrix_init(&a, K, K + 1) != 0)
+  {
+    free(mat);
+    matrix_free(&a);
+    fprintf(stderr, "mykey: failed to allocate matrix workspace\n");
+    return -1;
+  }
 
   // fill matrix
 
@@ -1830,11 +1846,8 @@ int mykey(unsigned short *out, vec x)
     for (j = 0; j < K + 1; j++)
     {
       a.x[i][j] = mat[j][i];
-      printf("%d,", mat[j][i]);
     }
-    printf("\n");
   }
-  printf("\n");
   // exit(1);
 
   vec v = {0};
@@ -1846,18 +1859,21 @@ int mykey(unsigned short *out, vec x)
     printf("%d,", out[i]);
   }
   printf("\n");
+  free(mat);
+  matrix_free(&a);
   return 0;
 }
 
-static int mkg(unsigned short matrix[N][K * E], OP *result)
+static int mkg(unsigned short matrix[N][K], vec *result)
 {
   int i, j, k, l;
   OP w = {0};
-  unsigned short tr[N] = {0};
-  unsigned short ta[N] = {0};
-  unsigned short ma[N][K * E] = {0};
-  unsigned short powers[K * 2][N] = {0};
-  unsigned short polynomial_table[K * 2][K * 2] = {0};
+  unsigned short *tr = calloc(N, sizeof(*tr));
+  unsigned short *ta = calloc(N, sizeof(*ta));
+  unsigned short (*ma)[K] = calloc(N, sizeof(*ma));
+  unsigned short (*powers)[N] = calloc(K * 2, sizeof(*powers));
+  unsigned short (*polynomial_table)[K * 2] =
+      calloc(K * 2, sizeof(*polynomial_table));
 
   // w=setpol(g,K+1);
   // printpol(o2v(w));
@@ -1870,7 +1886,19 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
 
   const int max_polynomial_attempts = 10000;
   bool found_valid_polynomial = false;
-  vec pp = {0}, tt = {0};
+  vec pp = {0}, tt = {0}, polynomial = {0};
+
+  if (tr == NULL || ta == NULL || ma == NULL || powers == NULL ||
+      polynomial_table == NULL)
+  {
+    fprintf(stderr, "mkg: failed to allocate key-generation workspace\n");
+    free(tr);
+    free(ta);
+    free(ma);
+    free(powers);
+    free(polynomial_table);
+    return -1;
+  }
 
   for (int attempt = 0; attempt < max_polynomial_attempts; attempt++)
   {
@@ -1885,10 +1913,11 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
       continue;
 
     w = setpol(tt.x, K + 1);
+    polynomial = o2v(w);
     found_valid_polynomial = true;
     for (i = 0; i < N; i++)
     {
-      ta[i] = trace(w, i);
+      ta[i] = trace(polynomial, i);
       if (ta[i] == 0)
       {
         printf("trace 0 @ %d\n", i);
@@ -1904,6 +1933,11 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
   {
     fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n",
             max_polynomial_attempts);
+    free(tr);
+    free(ta);
+    free(ma);
+    free(powers);
+    free(polynomial_table);
     return -1;
   }
   for (i = 0; i < N; i++)
@@ -1964,23 +1998,18 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
 
       for (k = 0; k < K; k++)
         s ^= gf[mlt(fg[polynomial_table[k][i]], fg[ma[j][k]])];
-       printf("%d,",s);
       matrix[j][i] = s;
     }
   }
   // printf("\n");
   // exit(1);
 
-  for (j = 0; j < N; j++)
-  {
-    for (i = 0; i < K; i++)
-      printf("%d,", matrix[j][i]);
-    printf("\n");
-  }
-  // exit(1);
-  // wait();
-
-  *result = w;
+  *result = o2v(w);
+  free(tr);
+  free(ta);
+  free(ma);
+  free(powers);
+  free(polynomial_table);
   return 0;
 }
 
@@ -1990,30 +2019,48 @@ vec pubkeygen(unsigned short permutation[N],
               RNG *rng,
               unsigned short syndrome_matrix[N][K])
 {
-  int i, j;
   FILE *fp;
-  unsigned short field_matrix[N][K * E] = {0};
-  MTX check_matrix = {0}, scrambler = {0}, public_matrix = {0};
-  MTX public_check_matrix = {0};
-  OP w = {0};
-  vec v = {0};
+  unsigned short (*field_matrix)[K] = calloc(N, sizeof(*field_matrix));
+  MTX check_matrix = {0}, scrambler = {0}, public_check_matrix = {0};
+  vec w = {0};
+
+  if (field_matrix == NULL ||
+      matrix_init(&check_matrix, N, K * E) != 0 ||
+      matrix_init(&scrambler, K * E, K * E) != 0 ||
+      matrix_init(inverse_scrambler, K * E, K * E) != 0)
+  {
+    fprintf(stderr, "pubkeygen: failed to allocate key-generation matrices\n");
+    free(field_matrix);
+    matrix_free(&check_matrix);
+    matrix_free(&scrambler);
+    matrix_free(&public_check_matrix);
+    matrix_free(inverse_scrambler);
+    exit(EXIT_FAILURE);
+  }
 
   if (mkg(field_matrix, &w) != 0)
+  {
+    free(field_matrix);
+    matrix_free(&check_matrix);
+    matrix_free(&scrambler);
+    matrix_free(&public_check_matrix);
+    matrix_free(inverse_scrambler);
     exit(EXIT_FAILURE);
-  printpol(o2v(w));
+  }
+  printpol(w);
   printf(" ==goppa polynomial\n");
 
-  v = o2v(w);
   //fp = fopen("sk.key", "wb");
   //fwrite(g, 2, K + 1, fp);
   //fclose(fp);
-  oprintpol(w);
+  printpol(w);
   printf("\n");
-  printsage(o2v(w));
+  printsage(w);
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
 
   bdet(field_matrix, &check_matrix);
+  free(field_matrix);
 
   Pgen(permutation);
   fp = fopen("P.key", "w");
@@ -2055,22 +2102,27 @@ vec pubkeygen(unsigned short permutation[N],
   */
 
   //  exit(1);
-  public_check_matrix = mulmat(&scrambler, &check_matrix, 1);
-  for (i = 0; i < K * E; i++)
+  if (mulmat(&scrambler, &check_matrix, 1, &public_check_matrix) != 0)
   {
-    for (j = 0; j < N; j++)
-      public_matrix.x[j][i] = public_check_matrix.x[permutation[j]][i];
+    fprintf(stderr, "pubkeygen: failed to multiply the check and scrambler matrices\n");
+    matrix_free(&check_matrix);
+    matrix_free(&scrambler);
+    matrix_free(&public_check_matrix);
+    matrix_free(inverse_scrambler);
+    exit(EXIT_FAILURE);
   }
-  toByte(&public_matrix, syndrome_matrix);
+  toByte(&public_check_matrix, permutation, syndrome_matrix);
 
-  return v;
+  matrix_free(&check_matrix);
+  matrix_free(&scrambler);
+  matrix_free(&public_check_matrix);
+  return w;
 }
 
-static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
+static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
 {
   int i, j;
   vec v = {0};
-  OP s = {0};
   unsigned ch[K * E] = {0};
   unsigned char h2o[K * E] = {0};
 
@@ -2106,9 +2158,7 @@ static OP dec(const MTX *inverse_scrambler, unsigned short ss[])
     printf("%d,", uk[i]);
   printf("\n");
   //    exit(1);
-  s = setpol(uk, K);
-
-  return s;
+  return Setvec(uk, K);
 }
 
 int ero2(vec v, const unsigned short permutation[N])
@@ -2267,7 +2317,7 @@ vec zin(const MTX *inverse_scrambler,
         unsigned short zz[])
 {
   int i, j;
-  OP s = {0};
+  vec s = {0};
   unsigned short ss[K] = {0};
 
   for (i = 0; i < N; i++)
@@ -2289,5 +2339,5 @@ vec zin(const MTX *inverse_scrambler,
   printf(" ==ss\n");
   // exit(1);
 
-  return o2v(s);
+  return s;
 }
