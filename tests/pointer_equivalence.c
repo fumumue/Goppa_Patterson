@@ -26,61 +26,25 @@ int main(void)
   uint8_t xor8[67], xor8_expected[67];
   MTX full_rank_matrix = {0};
   MTX singular_matrix = {0}, inverse_matrix = {0};
-  unsigned short rank_rows[DEG][DEG] = {0};
+  MTX product_a = {0}, product_b = {0}, product = {0};
   RNG rng = {123456789, 362436069, 521288629, 88675123};
   OP f, h;
   int failed = 0;
 
   gen_gf(E, N, 1);
+  if (matrix_init(&full_rank_matrix, 8, 8) != 0 ||
+      matrix_init(&inverse_matrix, 8, 8) != 0 ||
+      matrix_init(&singular_matrix, 2, 2) != 0)
+  {
+    fprintf(stderr, "matrix allocation failed\n");
+    return 1;
+  }
   if (random_full_rank_binary_matrix(&full_rank_matrix, &rng) != 0)
   {
     fprintf(stderr, "full-rank matrix generation failed\n");
     return 1;
   }
 
-  for (int i = 0; i < DEG; i++)
-  {
-    for (int j = 0; j < DEG; j++)
-    {
-      if (full_rank_matrix.x[i][j] > 1)
-      {
-        fprintf(stderr, "generated matrix contains a non-binary value\n");
-        failed = 1;
-      }
-      rank_rows[i][j] = full_rank_matrix.x[i][j];
-    }
-  }
-
-  int rank = 0;
-  for (int col = 0; col < DEG; col++)
-  {
-    int pivot = rank;
-    while (pivot < DEG && rank_rows[pivot][col] == 0)
-      pivot++;
-    if (pivot == DEG)
-      continue;
-
-    for (int j = 0; j < DEG; j++)
-    {
-      unsigned short tmp = rank_rows[rank][j];
-      rank_rows[rank][j] = rank_rows[pivot][j];
-      rank_rows[pivot][j] = tmp;
-    }
-    for (int row = rank + 1; row < DEG; row++)
-    {
-      if (rank_rows[row][col] == 1)
-      {
-        for (int j = col; j < DEG; j++)
-          rank_rows[row][j] ^= rank_rows[rank][j];
-      }
-    }
-    rank++;
-  }
-  if (rank != DEG)
-  {
-    fprintf(stderr, "generated binary matrix rank: expected %d, got %d\n", DEG, rank);
-    failed = 1;
-  }
   if (is_reg(&full_rank_matrix, &inverse_matrix, &rng) != 0)
   {
     fprintf(stderr, "is_reg failed to invert a full-rank matrix\n");
@@ -88,12 +52,12 @@ int main(void)
   }
   else
   {
-    for (int row = 0; row < DEG; row++)
+    for (int row = 0; row < 8; row++)
     {
-      for (int col = 0; col < DEG; col++)
+      for (int col = 0; col < 8; col++)
       {
         unsigned short product = 0;
-        for (int k = 0; k < DEG; k++)
+        for (int k = 0; k < 8; k++)
           product ^= full_rank_matrix.x[row][k] & inverse_matrix.x[k][col];
         if (product != (unsigned short)(row == col))
         {
@@ -103,11 +67,104 @@ int main(void)
       }
     }
   }
-  if (is_reg(&singular_matrix, &inverse_matrix, &rng) == 0)
+  singular_matrix.x[0][0] = 1;
+  singular_matrix.x[0][1] = 1;
+  singular_matrix.x[1][0] = 1;
+  singular_matrix.x[1][1] = 1;
+  MTX singular_inverse = {0};
+  if (matrix_init(&singular_inverse, 2, 2) != 0)
+  {
+    fprintf(stderr, "singular inverse allocation failed\n");
+    failed = 1;
+  }
+  else if (is_reg(&singular_matrix, &singular_inverse, &rng) == 0)
   {
     fprintf(stderr, "is_reg accepted a singular matrix\n");
     failed = 1;
   }
+  matrix_free(&full_rank_matrix);
+  matrix_free(&singular_matrix);
+  matrix_free(&singular_inverse);
+  matrix_free(&inverse_matrix);
+
+  if (matrix_init(&product_a, 2, 2) != 0 ||
+      matrix_init(&product_b, 3, 2) != 0)
+  {
+    fprintf(stderr, "matrix multiplication allocation failed\n");
+    failed = 1;
+  }
+  else
+  {
+    product_a.x[0][0] = 1;
+    product_a.x[0][1] = 1;
+    product_a.x[1][0] = 1;
+    product_b.x[0][0] = 1;
+    product_b.x[1][1] = 1;
+    product_b.x[2][0] = 1;
+    if (mulmat(&product_a, &product_b, 1, &product) != 0 ||
+        product.rows != 3 || product.cols != 2 ||
+        product.x[0][0] != 1 || product.x[0][1] != 1 ||
+        product.x[1][0] != 1 || product.x[1][1] != 0 ||
+        product.x[2][0] != 1 || product.x[2][1] != 1)
+    {
+      fprintf(stderr, "binary matrix multiplication mismatch\n");
+      failed = 1;
+    }
+  }
+  matrix_free(&product_a);
+  matrix_free(&product_b);
+  matrix_free(&product);
+
+  MTX target_scrambler = {0}, target_inverse = {0};
+  if (matrix_init(&target_scrambler, DEG, DEG) != 0 ||
+      matrix_init(&target_inverse, DEG, DEG) != 0)
+  {
+    fprintf(stderr, "target-size matrix allocation failed\n");
+    failed = 1;
+  }
+  else if (random_full_rank_binary_matrix(&target_scrambler, &rng) != 0 ||
+           is_reg(&target_scrambler, &target_inverse, &rng) != 0)
+  {
+    fprintf(stderr, "target-size binary matrix generation/inversion failed\n");
+    failed = 1;
+  }
+  else
+  {
+    const size_t sample_indices[] = {0, DEG / 2, DEG - 1};
+    for (size_t i = 0; i < SIZE_OF_ARRAY(sample_indices); i++)
+      for (size_t j = 0; j < SIZE_OF_ARRAY(sample_indices); j++)
+      {
+        unsigned short product_value = 0;
+        size_t row = sample_indices[i], col = sample_indices[j];
+        for (size_t k = 0; k < DEG; k++)
+          product_value ^= target_scrambler.x[row][k] & target_inverse.x[k][col];
+        if (product_value != (unsigned short)(row == col))
+        {
+          fprintf(stderr, "target-size matrix inverse mismatch at [%zu][%zu]\n",
+                  row, col);
+          failed = 1;
+        }
+      }
+  }
+  matrix_free(&target_scrambler);
+  matrix_free(&target_inverse);
+
+  MTX target_check = {0};
+  if (matrix_init(&target_check, N, DEG) != 0)
+  {
+    fprintf(stderr, "target-size rectangular matrix allocation failed\n");
+    failed = 1;
+  }
+  else
+  {
+    target_check.x[N - 1][DEG - 1] = 1;
+    if (target_check.storage[(size_t)N * DEG - 1] != 1)
+    {
+      fprintf(stderr, "target-size contiguous matrix indexing mismatch\n");
+      failed = 1;
+    }
+  }
+  matrix_free(&target_check);
 
   unsigned short invalid_error[N] = {0};
   if (mkerr(invalid_error, N + 1, &rng) == 0)
@@ -250,6 +307,24 @@ int main(void)
   failed |= expect_vec("vmul", vmul(a, b), expected_vector_product.x);
   failed |= expect_vec("fmul", fmul(a, b), expected_product.x);
   failed |= expect_vec("omul", o2v(omul(f, h)), expected_product.x);
+
+  for (int sample = 0; sample < 32; sample++)
+  {
+    vec left = {0}, right = {0}, product = {0};
+
+    for (int i = 0; i < 20; i++)
+    {
+      left.x[i] = (unsigned short)((sample * 17 + i * 13 + 1) % M);
+      right.x[i] = (unsigned short)((sample * 29 + i * 7 + 1) % M);
+    }
+    for (int i = 0; i < 20; i++)
+      for (int j = 0; j < 20; j++)
+        if (left.x[i] != 0 && right.x[j] != 0)
+          product.x[i + j] ^= gf[mlt(fg[left.x[i]], fg[right.x[j]])];
+
+    failed |= expect_vec("omul vector multiplication",
+                         o2v(omul(v2o(left), v2o(right))), product.x);
+  }
 
   return failed;
 }
