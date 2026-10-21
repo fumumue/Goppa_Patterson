@@ -171,12 +171,12 @@ typedef union {
   __m256 a;
 } Uh;
 
-typedef union {
-  unsigned short x[N][N];
-  unsigned long long d[N][N/4];
-  __m256 c[N][N/16];
-  vec a[N];
-  ja b;
+typedef struct
+{
+  unsigned short **x;
+  unsigned short *storage;
+  size_t rows;
+  size_t cols;
 } MTX;
 
 /*

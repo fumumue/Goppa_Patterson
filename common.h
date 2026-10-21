@@ -50,9 +50,13 @@ int mkerr(unsigned short *z1, int num, RNG *rng);
 int mkS(const MTX *cc, MTX *R);
 int mkRS(const MTX *cc, MTX *R);
 int binv(const MTX *cc, MTX *L, int Y);
-MTX gauss(const MTX *input);
-MTX matinv(const MTX *input, int n);
-MTX mulmat(const MTX *A, const MTX *B, int flg);
+int gauss(const MTX *input, MTX *inverse);
+int matinv(const MTX *input, int n, MTX *inverse);
+/* Zero-initialize MTX objects before first use; init replaces existing storage. */
+int matrix_init(MTX *matrix, size_t rows, size_t cols);
+void matrix_free(MTX *matrix);
+int matrix_copy(MTX *destination, const MTX *source);
+int mulmat(const MTX *A, const MTX *B, int flg, MTX *result);
 void mmul(const MTX *A, const MTX *B);
 
 #endif
