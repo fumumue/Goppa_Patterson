@@ -81,6 +81,28 @@ int main(void)
     fprintf(stderr, "generated binary matrix rank: expected %d, got %d\n", DEG, rank);
     failed = 1;
   }
+  if (is_reg(&full_rank_matrix, &inverse_matrix, &rng) != 0)
+  {
+    fprintf(stderr, "is_reg failed to invert a full-rank matrix\n");
+    failed = 1;
+  }
+  else
+  {
+    for (int row = 0; row < DEG; row++)
+    {
+      for (int col = 0; col < DEG; col++)
+      {
+        unsigned short product = 0;
+        for (int k = 0; k < DEG; k++)
+          product ^= full_rank_matrix.x[row][k] & inverse_matrix.x[k][col];
+        if (product != (unsigned short)(row == col))
+        {
+          fprintf(stderr, "matrix inverse mismatch at [%d][%d]\n", row, col);
+          failed = 1;
+        }
+      }
+    }
+  }
   if (is_reg(&singular_matrix, &inverse_matrix, &rng) == 0)
   {
     fprintf(stderr, "is_reg accepted a singular matrix\n");

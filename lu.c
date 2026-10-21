@@ -1,3 +1,7 @@
+#include "common.h"
+
+#define F (K * E)
+
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
 {
   /*
@@ -66,6 +70,66 @@ int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
       return -1;
     }
   }
+
+  return 0;
+}
+
+int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
+{
+  (void)rng;
+  MTX reduced = *cc_input;
+  unsigned char inverse[F][F] = {0};
+
+  memset(R, 0, sizeof(*R));
+
+  for (int row = 0; row < F; row++)
+  {
+    for (int col = 0; col < F; col++)
+    {
+      if (reduced.x[row][col] > 1)
+        return -1;
+      inverse[row][col] = (unsigned char)(row == col);
+    }
+  }
+
+  for (int col = 0; col < F; col++)
+  {
+    int pivot = col;
+    while (pivot < F && reduced.x[pivot][col] == 0)
+      pivot++;
+    if (pivot == F)
+      return -1;
+
+    if (pivot != col)
+    {
+      for (int j = 0; j < F; j++)
+      {
+        unsigned short matrix_value = reduced.x[col][j];
+        reduced.x[col][j] = reduced.x[pivot][j];
+        reduced.x[pivot][j] = matrix_value;
+
+        unsigned char inverse_value = inverse[col][j];
+        inverse[col][j] = inverse[pivot][j];
+        inverse[pivot][j] = inverse_value;
+      }
+    }
+
+    for (int row = 0; row < F; row++)
+    {
+      if (row == col || reduced.x[row][col] == 0)
+        continue;
+
+      for (int j = 0; j < F; j++)
+      {
+        reduced.x[row][j] ^= reduced.x[col][j];
+        inverse[row][j] ^= inverse[col][j];
+      }
+    }
+  }
+
+  for (int row = 0; row < F; row++)
+    for (int col = 0; col < F; col++)
+      R->x[row][col] = inverse[row][col];
 
   return 0;
 }
