@@ -3,6 +3,47 @@
 unsigned short oinv(unsigned short a);
 unsigned short oinv2(unsigned short a);
 
+static int verify_decode_result(vec decoded,
+                                const unsigned short permutation[N],
+                                const unsigned short expected[N],
+                                int *decoded_count,
+                                int *expected_count,
+                                int *matching_count)
+{
+  unsigned char decoded_positions[N] = {0};
+  int valid = 1;
+
+  *decoded_count = 0;
+  *expected_count = 0;
+  *matching_count = 0;
+
+  for (int i = 0; i < T * 2; i++)
+  {
+    unsigned short position = decoded.x[i];
+    if (i > 0 && position == 0)
+      break;
+    if (position >= N || decoded_positions[position])
+    {
+      valid = 0;
+      continue;
+    }
+    decoded_positions[position] = 1;
+    (*decoded_count)++;
+  }
+
+  for (int i = 0; i < N; i++)
+  {
+    int was_expected = expected[i] != 0;
+    int was_decoded = decoded_positions[permutation[i]] != 0;
+    *expected_count += was_expected;
+    *matching_count += was_expected && was_decoded;
+    if (was_expected != was_decoded)
+      valid = 0;
+  }
+
+  return valid;
+}
+
 int main(void)
 {
   unsigned short z1[N] = {0}; //{1,0,1,1,1,0,0,0,0,0,1,1,1,0,0,1};
@@ -35,7 +76,18 @@ int main(void)
 
   v = patterson(w, f);
 
-  if (ero2(v, permutation) < 0)
+  int decoded_count = 0, expected_count = 0, matching_count = 0;
+  int decode_matches = verify_decode_result(v, permutation, z1,
+                                            &decoded_count, &expected_count,
+                                            &matching_count);
+  int reported_count = ero2(v, permutation);
+  decode_matches = decode_matches && reported_count == decoded_count;
+  printf("Patterson decode verification: %s "
+         "(matched %d/%d error positions; decoded %d, expected %d)\n",
+         decode_matches ? "PASS" : "FAIL",
+         matching_count, expected_count, decoded_count, expected_count);
+
+  if (reported_count < 0 || !decode_matches)
   {
     for (int i = 0; i < N; i++)
     {
@@ -44,5 +96,5 @@ int main(void)
     }
   }
 
-  return 0;
+  return decode_matches ? EXIT_SUCCESS : EXIT_FAILURE;
 }
