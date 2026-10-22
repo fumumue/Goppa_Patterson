@@ -709,6 +709,12 @@ OP omod(OP f, OP g)
 
   //  assert (("baka(A)\n", LT (g).n != 0));
 
+
+  // g が非ゼロの定数なら剰余はゼロ
+  if (odeg(g) == 0 && LT(g).a>0 /* g が非ゼロ */) {
+    OP zero = {0};
+    return zero;
+  }
   if (LT(f).n < LT(g).n)
   {
     //    exit(1);
@@ -723,7 +729,7 @@ OP omod(OP f, OP g)
   // printf("d %d\n",LT(g).n);
 
   // assert(("double baka\n", b.a != 0 && b.n != 0));
-  while (LT(f).n > 0 && LT(g).n > 0)
+  while (LT(f).n >= LT(g).n)
   {
 
     c = LTdiv(f, b);
@@ -1198,10 +1204,11 @@ static vec chen(vec f)
 vec vgcd(vec xx, vec yy)
 {
     vec tt = {0};
+    int iter = 0;
 
     while (1) {
-        // yy がゼロ多項式なら xx が gcd
         int zero = 1;
+
         for (int i = 0; i < DEG; i++) {
             if (yy.x[i] != 0) {
                 zero = 0;
@@ -1209,15 +1216,109 @@ vec vgcd(vec xx, vec yy)
             }
         }
 
-        if (zero)
+        if (zero) {
+            printf("GCD finished: yy = 0, iterations = %d\n",
+                   iter);
             break;
+        }
 
-        tt = o2v(omod(v2o(xx), v2o(yy)));
+        OP ox = v2o(xx);
+        OP oy = v2o(yy);
+
+        int dx = odeg(ox);
+        int dy = odeg(oy);
+
+        OP rem = omod(ox, oy);
+        tt = o2v(rem);
+
+        int rem_zero = 1;
+        for (int i = 0; i < DEG; i++) {
+            if (tt.x[i] != 0) {
+                rem_zero = 0;
+                break;
+            }
+        }
+
+        int dr = rem_zero ? -1 : odeg(rem);
+
+        printf("iter=%d: deg(xx)=%d deg(yy)=%d deg(rem)=%d\n",
+               iter, dx, dy, dr);
+
+        /*
+         * 非ゼロの剰余なら、次数は必ず deg(yy) より
+         * 小さくなければならない。
+         */
+        if (!rem_zero && dr >= dy) {
+            printf("ERROR: remainder degree did not decrease!\n");
+            exit(1);
+            return (vec){0};
+        }
+
         xx = yy;
         yy = tt;
+
+        iter++;
+
+        /* 異常時の安全装置 */
+        if (iter > DEG + 2) {
+            printf("ERROR: too many iterations!\n");
+            return (vec){0};
+        }
     }
 
     return xx;
+}
+
+
+int is_squarefree(vec g)
+{
+    vec deriv = {0};
+    vec d;
+    vec gcd;
+
+    /* 標数2での形式微分 */
+    for (int i = 1; i < DEG; i += 2)
+        deriv.x[i - 1] = g.x[i];
+
+    d = deriv;
+
+    /* 微分がゼロなら、非定数 g は無平方ではない */
+    int zero = 1;
+    for (int i = 0; i < DEG; i++) {
+        if (d.x[i] != 0) {
+            zero = 0;
+            break;
+        }
+    }
+
+    if (zero)
+        return 0;
+    printf("b");
+    gcd = vgcd(g, d);
+
+int is_constant = 1;
+
+for (int i = 1; i < DEG; i++) {
+    if (gcd.x[i] != 0) {
+        is_constant = 0;
+        break;
+    }
+}
+
+if (is_constant && gcd.x[0] != 0) {
+    return 1;
+} else {
+    return 0;
+} 
+exit(1);
+    /* GCD が非ゼロの定数多項式か調べる 
+    for (int i = 1; i < DEG; i++) {
+        if (gcd.x[i] != 0)
+            return 0;
+    }
+
+    return gcd.x[0] != 0;
+*/
 }
 
 
@@ -2034,7 +2135,7 @@ static int mkg(unsigned short matrix[N][K], vec *result)
 
   for (int attempt = 0; attempt < max_polynomial_attempts; attempt++)
   {
-    memset(pp.x, 0, sizeof(pp.x));
+    memset(pp.x, 0, sizeof(pp.x)+1);
     memset(tt.x, 0, sizeof(tt.x));
 
     label:
@@ -2045,16 +2146,26 @@ static int mkg(unsigned short matrix[N][K], vec *result)
       //exit(1);
       //goto label;
     
-    
-      mykey(tt.x, pp);
+    /*
+    mykey(tt.x, pp);
     tt.x[K] = 1;
     int l = ben_or(v2o(tt));
     if (l < 0)
       continue;
     w = setpol(tt.x, K + 1);
-    polynomial=o2v(w);
+    */
+    polynomial=pp;
+    
+
+
+    if(is_squarefree((polynomial))==0)
+    exit(1);
+
+    /* g と g' の GCD が定数でなければ生成し直す */
+    if(is_squarefree(pp)>0) //setpol(pp.x, K + 1);
+    polynomial = pp; //o2v(w);
+
   
-   
     found_valid_polynomial = true;
     for (i = 0; i < N; i++)
     {
@@ -2118,7 +2229,7 @@ static int mkg(unsigned short matrix[N][K], vec *result)
   */
 
   van(powers);
-  ogt(tt.x, polynomial_table);
+  ogt(pp.x, polynomial_table);
 
   printf("\nすげ、オレもうイキそ・・・\n");
 
@@ -2145,7 +2256,7 @@ static int mkg(unsigned short matrix[N][K], vec *result)
   // printf("\n");
   // exit(1);
 
-  *result = o2v(w);
+  *result = pp; //o2v(w);
   free(tr);
   free(ta);
   free(ma);
@@ -2189,6 +2300,12 @@ vec pubkeygen(unsigned short permutation[N],
     matrix_free(inverse_scrambler);
     exit(EXIT_FAILURE);
   }
+
+  printf("mkg output coefficients:\n");
+  for (int i = 0; i < DEG; i++) {
+    printf("w.x[%d] = %u\n", i, (unsigned)w.x[i]);
+  }
+
   printpol(w);
   printf(" ==goppa polynomial\n");
 
