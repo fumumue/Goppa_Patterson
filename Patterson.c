@@ -681,6 +681,8 @@ OP odiv(OP f, OP g)
   return ret;
 }
 
+
+
 // 多項式のべき乗
 OP opow(OP f, int n)
 {
@@ -928,6 +930,83 @@ void printsage(vec a)
   }
 }
 
+
+// vec 多項式の剰余
+vec vmod(vec f, vec g)
+{
+    vec r = f;
+    int dg = deg(g);
+
+    // ゼロ多項式で割ることはできない
+    bool gzero = true;
+    for (int i = 0; i < DEG; i++)
+        if (g.x[i] != 0)
+            gzero = false;
+
+    if (gzero)
+        exit(1);
+
+    while (true)
+    {
+        int dr = deg(r);
+
+        bool rzero = true;
+        for (int i = 0; i < DEG; i++)
+            if (r.x[i] != 0)
+                rzero = false;
+
+        if (rzero || dr < dg)
+            break;
+
+        int shift = dr - dg;
+
+        // 最高次係数の比（対数表現で除算）
+        int q = gf[mlt(fg[r.x[dr]],
+                    oinv(g.x[dg]))];
+
+        // r ^= g * q * x^shift
+        for (int j = 0; j <= dg; j++)
+        {
+            if (g.x[j] == 0)
+                continue;
+
+            int k = j + shift;
+            int product = gf[mlt(fg[g.x[j]], fg[q])];
+
+            r.x[k] = fg[r.x[k]] ^ product;
+
+            // 通常表現から対数表現へ戻す
+            r.x[k] = (r.x[k] == 0) ? 0 : fg[r.x[k]];
+        }
+
+        // 最高次項が消えていないなら異常
+        if (deg(r) >= dr)
+        {
+            printf("vmod: degree did not decrease\n");
+            exit(1);
+        }
+    }
+
+    return r;
+}
+
+
+vec vgcd2(vec xx, vec yy)
+{
+    vec tt = {0};
+
+    while (1)
+    {
+        tt = o2v(omod(v2o(xx), v2o(yy)));
+        xx = yy;
+        yy = tt;
+        if(LT(v2o(yy)).a==0)
+        break;
+    }
+
+    return xx;
+}
+
 // gcd for patterson
 OP zgcd(OP a, OP n, int P)
 {
@@ -1114,6 +1193,59 @@ static vec chen(vec f)
 
   return e;
 }
+
+
+vec vgcd(vec xx, vec yy)
+{
+    vec tt = {0};
+
+    while (1) {
+        // yy がゼロ多項式なら xx が gcd
+        int zero = 1;
+        for (int i = 0; i < DEG; i++) {
+            if (yy.x[i] != 0) {
+                zero = 0;
+                break;
+            }
+        }
+
+        if (zero)
+            break;
+
+        tt = o2v(omod(v2o(xx), v2o(yy)));
+        xx = yy;
+        yy = tt;
+    }
+
+    return xx;
+}
+
+
+vec derivative(vec f) {
+    vec df={0};
+    int y = deg(f);
+
+
+    if(y>0){
+    for (int i = 1; i <= y; i += 2) {
+        df.x[i - 1] = f.x[i];
+    }
+  }  
+
+    return df;
+}
+
+vec diff(vec a){
+  vec b={0};
+
+  b=derivative(a);
+
+  b=(vgcd((a),(b)));
+  
+
+  return b;
+}
+
 
 // GF(2^m) then set m in this function.
 int ben_or(OP f)
@@ -1866,7 +1998,7 @@ int mykey(unsigned short *out, vec x)
 
 static int mkg(unsigned short matrix[N][K], vec *result)
 {
-  int i, j, k, l;
+  int i, j, k;
   OP w = {0};
   unsigned short *tr = calloc(N, sizeof(*tr));
   unsigned short *ta = calloc(N, sizeof(*ta));
@@ -1904,16 +2036,25 @@ static int mkg(unsigned short matrix[N][K], vec *result)
   {
     memset(pp.x, 0, sizeof(pp.x));
     memset(tt.x, 0, sizeof(tt.x));
+
+    label:
+    printf("a");
     for (i = 0; i < K; i++)
       pp.x[i] = rand() % N;
-    mykey(tt.x, pp);
+      pp.x[K]=1;
+      //exit(1);
+      //goto label;
+    
+    
+      mykey(tt.x, pp);
     tt.x[K] = 1;
-    l = ben_or(v2o(tt));
+    int l = ben_or(v2o(tt));
     if (l < 0)
       continue;
-
     w = setpol(tt.x, K + 1);
-    polynomial = o2v(w);
+    polynomial=o2v(w);
+  
+   
     found_valid_polynomial = true;
     for (i = 0; i < N; i++)
     {
@@ -2038,6 +2179,7 @@ vec pubkeygen(unsigned short permutation[N],
     exit(EXIT_FAILURE);
   }
 
+  
   if (mkg(field_matrix, &w) != 0)
   {
     free(field_matrix);
