@@ -53,6 +53,7 @@ int main(void)
   RNG rng = {123456789, 362436069, 521288629, 88675123};
   vec f = {0}, w = {0}, v = {0};
 
+  srand(clock());
   if (z1 == NULL || permutation == NULL || syndrome_matrix == NULL)
   {
     fprintf(stderr, "main: failed to allocate input/output buffers\n");
@@ -62,7 +63,6 @@ int main(void)
     return EXIT_FAILURE;
   }
 
-  srand(clock());
   if (K > N)
   {
     printf("configuration error! K is too big K\n");
