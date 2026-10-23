@@ -306,6 +306,20 @@ int main(void)
   h = v2o(b);
   failed |= expect_vec("vmul", vmul(a, b), expected_vector_product.x);
   failed |= expect_vec("fmul", fmul(a, b), expected_product.x);
+  failed |= expect_vec("vmul vs fmul reference", vmul(a, b), fmul(a, b).x);
+
+  /* Differential tests: vmul must agree with the full-range vector reference. */
+  for (int sample = 0; sample < 32; sample++)
+  {
+    vec left = {0}, right = {0};
+    for (int i = 0; i < 20; i++)
+    {
+      left.x[i] = (unsigned short)((sample * 17 + i * 13 + 1) % M);
+      right.x[i] = (unsigned short)((sample * 29 + i * 7 + 1) % M);
+    }
+    failed |= expect_vec("vmul randomized reference", vmul(left, right),
+                         fmul(left, right).x);
+  }
   failed |= expect_vec("omul", o2v(omul(f, h)), expected_product.x);
 
   for (int sample = 0; sample < 32; sample++)
