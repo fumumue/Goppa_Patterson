@@ -291,14 +291,22 @@ vec vmul(vec a, vec b)
   k = deg(a);
   l = deg(b);
 
-  for (i = 0; i < k; i++)
+  /*
+   * deg() returns the highest nonzero coefficient index, so both
+   * endpoints must be included.  Truncate terms beyond DEG just as
+   * fmul() does, and skip zero coefficients before table lookup.
+   */
+  for (i = 0; i <= k; i++)
   {
-    for (j = 0; j < l; j++)
+    if (a.x[i] == 0)
+      continue;
+
+    for (j = 0; j <= l && j < DEG - i; j++)
     {
-      if (a.x[i] > 0)
-      {
-        c.x[i + j] ^= gf[mlt(fg[a.x[i]], fg[b.x[j]])];
-      }
+      if (b.x[j] == 0)
+        continue;
+
+      c.x[i + j] ^= gf[mlt(fg[a.x[i]], fg[b.x[j]])];
     }
   }
 
