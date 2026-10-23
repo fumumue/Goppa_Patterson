@@ -2037,16 +2037,17 @@ static int mkg(unsigned short matrix[N][K], vec *result)
     memset(pp.x, 0, sizeof(pp.x));
     memset(tt.x, 0, sizeof(tt.x));
 
-    label:
+    //label:
     printf("a");
-    for (i = 0; i < K; i++)
+    for (i = 0; i < K; i++){
       pp.x[i] = rand() % N;
+    }
       pp.x[K]=1;
       //exit(1);
       //goto label;
     
     
-      mykey(tt.x, pp);
+    mykey(tt.x, pp);
     tt.x[K] = 1;
     int l = ben_or(v2o(tt));
     if (l < 0)
