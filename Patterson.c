@@ -979,10 +979,8 @@ vec vmod(vec f, vec g)
             int k = j + shift;
             int product = gf[mlt(fg[g.x[j]], fg[q])];
 
-            r.x[k] = fg[r.x[k]] ^ product;
-
-            // 通常表現から対数表現へ戻す
-            r.x[k] = (r.x[k] == 0) ? 0 : fg[r.x[k]];
+            // vec の係数は通常表現なので、GF(2^m) の加算は XOR で直接行う
+            r.x[k] ^= product;
         }
 
         // 最高次項が消えていないなら異常
@@ -1040,7 +1038,8 @@ OP zgcd(OP a, OP n, int P)
   while (LT(a).n > P)
   {
 
-    r = omod(d, a);
+    // First migration step: use vector polynomial remainder, then convert back.
+    r = v2o(vmod(o2v(d), o2v(a)));
     q = odiv(d, a);
 
     d = a;
