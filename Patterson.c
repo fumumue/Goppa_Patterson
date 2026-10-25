@@ -1535,6 +1535,118 @@ OP osqrt(OP f, OP w)
   exit(1);
 }
 
+
+
+vec paloma(OP s, OP f)
+{
+    vec x = {0};
+    vec v = {0};
+    OP ss = {0};
+    OP null = {0};
+
+    OP g1, g2, g12;
+    OP s1, s2;
+    OP u, sp;
+
+    OP a0, a1, b0, b1;
+    OP q, r, b2;
+
+    x.x[1] = 1;   /* x */
+    v.x[0] = 1;   /* 1 */
+
+    /* ss = 1 + s*x mod f */
+    ss = omod(oadd(v2o(v), omul(s, v2o(x))), f);
+
+    /* gcd 分解 */
+    g1 = gcd(s, f);
+    g2 = gcd(ss, f);
+
+    /* g12 = f / (g1*g2) */
+    OP g1g2 = omul(g1, g2);
+    g12 = odiv(f, g1g2);
+
+    if (odeg(g12) < K - 1) {
+        printf("deg(g12) too small\n");
+        exit(1);
+    }
+
+    /* 正規化 */
+    s1 = (odeg(g1) > 0) ? odiv(s, g1) : s;
+    s2 = (odeg(g2) > 0) ? odiv(ss, g2) : ss;
+
+    /* u = g1*s2 * inv(g2*s1) mod g12 */
+    OP denom = omul(g2, s1);
+    if (odeg(gcd(denom, g12)) > 0) {
+        printf("denominator not invertible mod g12\n");
+        exit(1);
+    }
+
+    u = omod(
+            omul(
+                omul(g1, s2),
+                inv(denom, g12)
+            ),
+            g12
+        );
+
+    /* 平方根（存在は理論保証） */
+    sp = osqrt(u, g12);
+
+    /* 拡張ユークリッド */
+    a0 = sp;
+    a1 = g12;
+    b0 = v2o(v);   /* 1 */
+    b1 = null;     /* 0 */
+
+    while (1) {
+        q = odiv(a0, a1);
+        r = omod(a0, a1);
+
+        a0 = a1;
+        a1 = r;
+
+        b2 = omod(oadd(b0, omul(q, b1)), g12);
+        b0 = b1;
+        b1 = b2;
+
+        /* 病的ケース対応 */
+        if (odeg(a0) == K/2 - odeg(g1) &&
+            odeg(b0) <= (K-1)/2 - odeg(g2))
+            break;
+
+        if (odeg(a1) < 0) {
+            printf("Euclid failed\n");
+            exit(1);
+        }
+    }
+
+    /* σ = a^2 + x b^2 */
+    OP a = omul(a0, g2);
+    OP b = omul(b0, g1);
+
+    OP sigma = oadd(
+        omul(a, a),
+        omul(omul(b, b), v2o(x))
+    );
+
+    if (odeg(sigma) != K) {
+        printf("warning: deg(sigma) != K\n");
+    }
+
+    /* デバッグ用（病的ケースチェック） */
+    /*
+    oprintpol(g1); printf(" = g1\n");
+    oprintpol(g2); printf(" = g2\n");
+    oprintpol(g12); printf(" = g12\n");
+    oprintpol(a); printf(" = a\n");
+    oprintpol(b); printf(" = b\n");
+    oprintpol(sigma); printf(" = sigma\n");
+    */
+
+    return chen(o2v(sigma));
+}
+
+
 // パターソンアルゴリズムでバイナリGoppa符号を復号する
 vec patterson(vec w_vec, vec f_vec)
 {

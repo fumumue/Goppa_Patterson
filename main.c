@@ -89,7 +89,8 @@ int main(void)
   printpol(f);
   printf(" ==syndrome\n");
 
-  v = patterson(w, f);
+  v=paloma(v2o(f),v2o(w));
+  //v = patterson(w, f);
 
   int decoded_count = 0, expected_count = 0, matching_count = 0;
   int decode_matches = verify_decode_result(v, permutation, z1,

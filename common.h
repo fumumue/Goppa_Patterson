@@ -35,6 +35,7 @@ vec pubkeygen(unsigned short permutation[N],
 vec zin(const MTX *inverse_scrambler,
         const unsigned short syndrome_matrix[N][K],
         unsigned short zz[]);
+vec paloma(OP w,OP f);
 vec patterson(vec w, vec f);
 int ero2(vec v, const unsigned short permutation[N]);
 void printpol(vec a);
