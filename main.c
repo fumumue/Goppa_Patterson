@@ -89,6 +89,7 @@ int main(void)
   printpol(f);
   printf(" ==syndrome\n");
 
+
   v=paloma(v2o(f),v2o(w));
   //v = patterson(w, f);
 

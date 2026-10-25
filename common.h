@@ -45,6 +45,7 @@ vec fmul(vec a, vec b);
 OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
 
+int mkg(unsigned short matrix[N][K], vec *result);
 int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng);
 int mkerr(unsigned short *z1, int num, RNG *rng);

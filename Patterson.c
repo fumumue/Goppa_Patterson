@@ -154,8 +154,18 @@ int terms(OP f)
 }
 
 
+// 零多項式なら -1、それ以外は最高次の添字
+static inline int deg(const vec *a)
+{
+    for (int i = DEG - 1; i >= 0; i--)
+        if (a->x[i] != 0)
+            return i;
+    return -1;
+}
+
+
 // 多項式の次数(default)
-int deg(vec a)
+int vdeg(vec a)
 {
   int i, n = 0, flg = 0;
 
@@ -275,7 +285,7 @@ OP norm(OP f)
 vec vadd(vec a, vec b)
 {
   vec c = {0};
-  size_t len = (size_t)((deg(a) > deg(b) ? deg(a) : deg(b)) + 1);
+  size_t len = (size_t)((deg(&a) > deg(&b) ? deg(&a) : deg(&b)) + 1);
 
   xor_u16(c.x, a.x, len);
   xor_u16(c.x, b.x, len);
@@ -288,8 +298,8 @@ vec vmul(vec a, vec b)
   int i, j, k, l;
   vec c = {0};
 
-  k = deg(a);
-  l = deg(b);
+  k = deg(&a);
+  l = deg(&b);
 
   for (i = 0; i < k; i++)
   {
@@ -587,7 +597,7 @@ void printpol(vec a)
 {
   int i, n;
 
-  n = deg(a);
+  n = deg(&a);
 
   // printf ("baka\n");
   assert(n >= 0);
@@ -763,7 +773,7 @@ OP opowmod(OP f, OP mod, int n)
 static unsigned short trace(vec f, unsigned short x)
 {
   unsigned short u = 0;
-  int degree = deg(f);
+  int degree = deg(&f);
 
   for (int i = 0; i <= degree; i++)
     if (f.x[i] != 0)
@@ -932,10 +942,10 @@ void printsage(vec a)
 
 
 // vec 多項式の剰余
-vec vmod(vec f, vec g)
+vec vmod2(vec f, vec g)
 {
     vec r = f;
-    int dg = deg(g);
+    int dg = deg(&g);
 
     // ゼロ多項式で割ることはできない
     bool gzero = true;
@@ -948,7 +958,7 @@ vec vmod(vec f, vec g)
 
     while (true)
     {
-        int dr = deg(r);
+        int dr = deg(&r);
 
         bool rzero = true;
         for (int i = 0; i < DEG; i++)
@@ -980,11 +990,80 @@ vec vmod(vec f, vec g)
         }
 
         // 最高次項が消えていないなら異常
-        if (deg(r) >= dr)
+        if (deg(&r) >= dr)
         {
             printf("vmod: degree did not decrease\n");
             exit(1);
         }
+    }
+
+    return r;
+}
+
+
+// vec 多項式の剰余 (f mod g)
+// 係数は通常表現（GF(2^E) の元そのもの）で保持する。
+vec vmod(vec f, vec g)
+{
+    vec r = f;
+    int i;
+
+    // g の次数を求める（零多項式なら -1）
+    int dg = -1;
+    for (i = DEG - 1; i >= 0; i--)
+    {
+        if (g.x[i] != 0)
+        {
+            dg = i;
+            break;
+        }
+    }
+    if (dg < 0)
+    {
+        fprintf(stderr, "vmod: division by zero polynomial\n");
+        exit(1);
+    }
+
+    // g の最高次係数の逆元（元のコードと同じく oinv の戻り値を mlt にそのまま渡す）
+    const int inv_lead = oinv(g.x[dg]);
+
+    // r の次数を求める（零多項式なら -1）
+    int dr = -1;
+    for (i = DEG - 1; i >= 0; i--)
+    {
+        if (r.x[i] != 0)
+        {
+            dr = i;
+            break;
+        }
+    }
+
+    // 零多項式（dr = -1）や dr < dg なら、そのまま剰余
+    while (dr >= dg)
+    {
+        int shift = dr - dg;
+
+        // 最高次係数の比 q = r[dr] / g[dg]
+        int q = gf[mlt(fg[r.x[dr]], inv_lead)];
+
+        // r ^= q * x^shift * g
+        for (int j = 0; j <= dg; j++)
+        {
+            if (g.x[j] == 0)
+                continue;
+            r.x[j + shift] ^= gf[mlt(fg[g.x[j]], fg[q])];
+        }
+
+        // 最高次項が消えていないなら異常
+        if (r.x[dr] != 0)
+        {
+            fprintf(stderr, "vmod: leading term was not eliminated\n");
+            exit(1);
+        }
+
+        // 次の最高次へ（零多項式になれば dr = -1 でループ終了）
+        while (dr >= 0 && r.x[dr] == 0)
+            dr--;
     }
 
     return r;
@@ -1070,7 +1149,9 @@ OP gcd(OP xx, OP yy)
 
   h.t[0].a = 1;
   h.t[0].n = 0;
-  if (deg(o2v(xx)) < deg(o2v(yy)))
+  vec vtmp=o2v(xx);
+  vec temp=o2v(yy);
+  if (deg(&vtmp) < deg(&temp))
   {
     tmp = xx;
     xx = yy;
@@ -1119,7 +1200,7 @@ v2i(vec v)
 {
   unsigned int d = 0, i, e = 0;
 
-  for (i = 0; i < deg(v) + 1; i++)
+  for (i = 0; i < deg(&v) + 1; i++)
   {
     e = v.x[i];
     d ^= (e << i);
@@ -1168,7 +1249,7 @@ static vec chen(vec f)
   int count = 0, n, x = 0;
   unsigned short z;
 
-  n = deg(f);
+  n = deg(&f);
   // exit(1);
   // #pragma omp parallel for private(i)
   for (x = 0; x < N; x++)
@@ -1223,7 +1304,7 @@ vec vgcd(vec xx, vec yy)
 
 vec derivative(vec f) {
     vec df={0};
-    int y = deg(f);
+    int y = deg(&f);
 
 
     if(y>0){
@@ -1258,7 +1339,8 @@ int ben_or(OP f)
     fprintf(stderr, "ben_or: failed to allocate polynomial workspace\n");
     return -1;
   }
-  n = deg(o2v(f));
+  vec tmp=o2v(f);
+  n = deg(&tmp);
 
   if (n == 0)
   {
@@ -1379,7 +1461,8 @@ OP osqrt(OP f, OP w)
 
   j = 0;
   jj = 0;
-  k = deg(o2v(f));
+  vec vtmp=o2v(f);
+  k = deg(&vtmp);
   for (i = 0; i < k + 1; i++)
   {
     if (f.t[i].n % 2 == 0 && f.t[i].a > 0)
@@ -1395,8 +1478,8 @@ OP osqrt(OP f, OP w)
       printf(" odd %d\n", i);
     }
   }
-
-  k = deg(o2v(w));
+  vtmp=o2v(w);
+  k = deg(&vtmp);
   // printf ("%d\n", k);
   // exit(1);
   j = 0;
@@ -1443,7 +1526,8 @@ OP osqrt(OP f, OP w)
     // wait ();
     // exit (1);
   }
-  if (deg(o2v(s)) > 0)
+  vtmp=o2v(s);
+  if (deg(&vtmp) > 0)
     tmp = omod(omul(s, r), w);
   if (odeg((tmp)) > 0)
   {
@@ -1684,7 +1768,8 @@ vec patterson(vec w_vec, vec f_vec)
   b2 = omod(omul(g1, g1), w);
   printpol(o2v(b2));
   printf(" g1*g1%%w===========\n");
-  if (deg(o2v(b2)) == 0)
+  vec tmp=o2v(b2);
+  if (deg(&tmp) == 0)
   {
     printf("b2 is 0\n");
     exit(1);
@@ -2108,79 +2193,66 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
-static int mkg(unsigned short matrix[N][K], vec *result)
+
+int mkg(unsigned short matrix[N][K], vec *result)
 {
-  int i, j, k;
   OP w = {0};
+  vec pp = {0}, tt = {0}, polynomial = {0};
   unsigned short *tr = calloc(N, sizeof(*tr));
   unsigned short *ta = calloc(N, sizeof(*ta));
-  unsigned short (*ma)[K] = calloc(N, sizeof(*ma));
+  unsigned short (*lma)[K] = calloc(N, sizeof(*lma)); // lma[j][k] = fg[ma[j][k]]
+  unsigned short (*lpt)[K] = calloc(K, sizeof(*lpt)); // lpt[i][k] = fg[polynomial_table[k][i]]
   unsigned short (*powers)[N] = calloc(K * 2, sizeof(*powers));
   unsigned short (*polynomial_table)[K * 2] =
       calloc(K * 2, sizeof(*polynomial_table));
 
-  // w=setpol(g,K+1);
-  // printpol(o2v(w));
-  // printf("\n");
-  // exit(1);
-  // w=omul(f,f);
-
-  // 既約性判定のためのBen-Orアルゴリズム。拡大体にも対応している。デフォルトでGF(8192)
-  // 既約多項式しか使わない。
-
-  const int max_polynomial_attempts = 10000;
-  bool found_valid_polynomial = false;
-  vec pp = {0}, tt = {0}, polynomial = {0};
-
-  if (tr == NULL || ta == NULL || ma == NULL || powers == NULL ||
-      polynomial_table == NULL)
+  if (tr == NULL || ta == NULL || lma == NULL || lpt == NULL ||
+      powers == NULL || polynomial_table == NULL)
   {
     fprintf(stderr, "mkg: failed to allocate key-generation workspace\n");
     free(tr);
     free(ta);
-    free(ma);
+    free(lma);
+    free(lpt);
     free(powers);
     free(polynomial_table);
     return -1;
   }
 
-  for (int attempt = 0; attempt < max_polynomial_attempts; attempt++)
+  // 既約性判定のためのBen-Orアルゴリズム。既約多項式しか使わない。
+  const int max_polynomial_attempts = 10000;
+  bool found_valid_polynomial = false;
+
+  // 探索は逐次。見つかった時点で止める（共有変数の競合を避ける）
+  for (int attempt = 0;
+       attempt < max_polynomial_attempts && !found_valid_polynomial;
+       attempt++)
   {
     memset(pp.x, 0, sizeof(pp.x));
     memset(tt.x, 0, sizeof(tt.x));
 
-    //label:
-    printf("a");
-    for (i = 0; i < K; i++){
-      pp.x[i] = rand() % N;
-    }
-      pp.x[K]=1;
-      //exit(1);
-      //goto label;
-    
-    
+    for (int i = 0; i < K; i++)
+      pp.x[i] = rand() % N;   // 暗号用途なので getrandom() 等への置き換え推奨
+    pp.x[K] = 1;
+
     mykey(tt.x, pp);
     tt.x[K] = 1;
-    int l = ben_or(v2o(tt));
-    if (l < 0)
+    if (ben_or(v2o(tt)) < 0)
       continue;
+
     w = setpol(tt.x, K + 1);
-    polynomial=o2v(w);
-  
-   
-    found_valid_polynomial = true;
-    for (i = 0; i < N; i++)
+    polynomial = o2v(w);
+
+    // 各点の評価は独立なので、ここは並列化してよい
+    bool no_root = true;
+#pragma omp parallel for schedule(static) reduction(&&:no_root)
+    for (int i = 0; i < N; i++)
     {
       ta[i] = trace(polynomial, i);
       if (ta[i] == 0)
-      {
-        printf("trace 0 @ %d\n", i);
-        found_valid_polynomial = false;
-        break;
-      }
+        no_root = false;
     }
-    if (found_valid_polynomial)
-      break;
+    found_valid_polynomial = no_root;
   }
 
   if (!found_valid_polynomial)
@@ -2189,83 +2261,64 @@ static int mkg(unsigned short matrix[N][K], vec *result)
             max_polynomial_attempts);
     free(tr);
     free(ta);
-    free(ma);
+    free(lma);
+    free(lpt);
     free(powers);
     free(polynomial_table);
     return -1;
   }
-  for (i = 0; i < N; i++)
-  {
+
+  for (int i = 0; i < N; i++)
     tr[i] = oinv(ta[i]);
-    // printf("%d,", tr[i]);
-  }
 
   printpol(o2v(w));
   printf(" =irreducible\n");
   printsage(o2v(w));
   printf("\n");
-  // j++;
-  // if(j>100)
-  // exit(1);
-
-  // 多項式を固定したい場合コメントアウトする。
-  /*
-  memset(ta, 0, sizeof(ta));
-  w = setpol(g, K + 1);
-  printpol(o2v(w));
-  //printf(" =poly\n");
-  for (i = 0; i < N; i++)
-  {    ta[i] = trace(w, i);
-    if (ta[i] == 0)
-    {
-      printf("trace 0 @ %d\n", i);
-      fail = 1;
-      break;
-    }
-  }
-  oprintpol(w);
-  printf("\n");
-  printsage(o2v(w));
-  printf("\n");
-  printf("sagemath で既約性を検査してください！\n");
-  */
 
   van(powers);
   ogt(tt.x, polynomial_table);
 
-  printf("\nすげ、オレもうイキそ・・・\n");
-
-  for (j = 0; j < N; j++)
+  // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
+#pragma omp parallel for schedule(static)
+  for (int j = 0; j < N; j++)
   {
-    for (i = 0; i < K; i++)
+    for (int i = 0; i < K; i++)
     {
-      ma[j][i] = gf[mlt(fg[powers[i][j]], tr[j])];
+      unsigned short v = gf[mlt(fg[powers[i][j]], tr[j])];
+      lma[j][i] = fg[v];
     }
   }
 
-  unsigned short s;
-  for (i = 0; i < K; i++)
-  {
-    for (j = 0; j < N; j++)
-    {
-      s = 0;
+  // 転置しながら対数表現にして、内側ループを連続アクセスにする
+  for (int i = 0; i < K; i++)
+    for (int k = 0; k < K; k++)
+      lpt[i][k] = fg[polynomial_table[k][i]];
 
-      for (k = 0; k < K; k++)
-        s ^= gf[mlt(fg[polynomial_table[k][i]], fg[ma[j][k]])];
+  // matrix[j][i] = Σ_k polynomial_table[k][i] * ma[j][k]
+  // j ごとに別の行 matrix[j][*] にだけ書くので競合しない
+#pragma omp parallel for schedule(static)
+  for (int j = 0; j < N; j++)
+  {
+    for (int i = 0; i < K; i++)
+    {
+      unsigned short s = 0;
+      for (int k = 0; k < K; k++)
+        s ^= gf[mlt(lpt[i][k], lma[j][k])];
       matrix[j][i] = s;
     }
   }
-  // printf("\n");
-  // exit(1);
 
   *result = o2v(w);
   free(tr);
   free(ta);
-  free(ma);
+  free(lma);
+  free(lpt);
   free(powers);
   free(polynomial_table);
   return 0;
 }
+
 
 // Niederreiter暗号の公開鍵を作る
 vec pubkeygen(unsigned short permutation[N],

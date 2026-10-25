@@ -206,7 +206,8 @@ int mulmat(const MTX *A, const MTX *B, int mode, MTX *result)
         free(packed_b);
         return 0;
     }
-
+    
+    //#pragma omp parallel for schedule(static)
     for (size_t r = 0; r < rows; ++r) {
         for (size_t c = 0; c < cols; ++c) {
             unsigned short value = 0;
