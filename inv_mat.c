@@ -143,7 +143,7 @@ static inline void pack_elems(const unsigned short *elem, size_t kcnt,
 
 
 #define CH 4
-#define WB 4   // 出力側のスライス幅(語)。8語 = 64B = 1キャッシュライン
+#define WB 8   // 出力側のスライス幅(語)。8語 = 64B = 1キャッシュライン
 
 static int mulmat_gf2(const MTX *A, const MTX *B,
                       const unsigned short (*elems)[K],

@@ -2559,30 +2559,36 @@ vec pubkeygen(unsigned short permutation[N],
   //free(field_matrix);
 
   Pgen(permutation);
-  fp = fopen("P.key", "w");
-  fclose(fp);
-
+  //fp = fopen("P.key", "w");
+  //fclose(fp);
+  printf("Uh!-Pgen: %.3f s\n", now() - t0); t0 = now();
+  /*
   if (random_full_rank_binary_matrix(&scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to generate a full-rank scrambler matrix\n");
     exit(EXIT_FAILURE);
   }
-  // random_full_rank_binary_matrix と is_reg の後
-  printf("Uh!-scrambler: %.3f s\n", now() - t0); t0 = now();
+  
   if (is_reg(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
     exit(EXIT_FAILURE);
   }
+  */
+  // random_full_rank_binary_matrix と is_reg の後
+  printf("Uh!-scrambler: %.3f s\n", now() - t0); t0 = now();
   
-  /*
-    if (random_full_rank_binary_matrix_inv(&scrambler, inverse_scrambler, rng) != 0)
+  
+  if (random_full_rank_binary_matrix_inv(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to generate the scrambler matrix and its inverse\n");
     exit(EXIT_FAILURE);
   }
-  */
+  
   printf("Uh!-scrambler+inverse: %.3f s\n", now() - t0); t0 = now();
+
+  //exit(1);
+
   /*
     fp = fopen("inv_S.key", "wb");
   for(i=0;i<K*E;i++){

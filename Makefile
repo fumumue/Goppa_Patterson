@@ -7,7 +7,7 @@ CPPFLAGS ?=
 CFLAGS ?= -Wall -g -O3 -mavx -mavx2 -mtune=native -march=native -ffast-math -funroll-loops
 OPENMP_FLAGS ?= -fopenmp
 DEPFLAGS := -MMD -MP
-LDFLAGS ?=
+LDFLAGS ?= -flto
 LDLIBS ?=
 
 SOURCES := main.c Patterson.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c
