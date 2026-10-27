@@ -12,6 +12,9 @@ extern int mlt(int x, int y);
 extern int mltn(int n, int a);
 extern void makeS();
 
+#include <time.h>
+static double now(void){ struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return t.tv_sec + t.tv_nsec*1e-9; }
+
 // 有限体の元の逆数
 unsigned short
 oinv(unsigned short a)
@@ -1365,6 +1368,15 @@ OP setpol(unsigned short f[], int n)
   return v2o(Setvec(f, n));
 }
 
+
+/* ビット位置 a と b を交換する */
+static unsigned short swap_bits(unsigned short v, unsigned int a, unsigned int b)
+{
+    unsigned int x = ((v >> a) ^ (v >> b)) & 1u;
+    return (unsigned short)(v ^ ((x << a) | (x << b)));
+}
+
+
 // バイナリ型パリティチェック行列を生成する
 static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
 {
@@ -1376,7 +1388,8 @@ static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
     fprintf(stderr, "invalid check-matrix storage\n");
     exit(EXIT_FAILURE);
   }
-
+  
+  #pragma omp parallel for schedule(static)
   for (i = 0; i < N; i++)
   {
     for (j = 0; j < K; j++)
@@ -1384,7 +1397,7 @@ static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
       l = matrix[i][j];
       for (k = 0; k < E; k++)
       {
-        check_matrix->x[i][j * E + k] = l % 2;
+        check_matrix->x[i][j * E + k] = l & 1;
         l = (l >> 1);
       }
     }
@@ -2194,7 +2207,178 @@ int mykey(unsigned short *out, vec x)
 }
 
 
+// matrix[j][i] = (Σ_{m=0}^{i} g[m]·α_j^(i-m)) / g(α_j),  α_j = j
+static void matrix_horner(const vec *polynomial,
+                          const unsigned short *tr,   // tr[j] = oinv(g(j))
+                          unsigned short matrix[N][K])
+{
+#pragma omp parallel for schedule(static)
+  for (int j = 0; j < N; j++)
+  {
+    const unsigned short alpha = fg[j];
+    unsigned short q = polynomial->x[0];
+    matrix[j][0] = gf[mlt(fg[q], tr[j])];
+    for (int i = 1; i < K; i++)
+    {
+      q = gf[mlt(alpha, fg[q])] ^ polynomial->x[i];
+      matrix[j][i] = gf[mlt(fg[q], tr[j])];
+    }
+  }
+}
+
+
 int mkg(unsigned short matrix[N][K], vec *result)
+{
+  OP w = {0};
+  vec pp = {0}, tt = {0}, polynomial = {0};
+  unsigned short *tr = calloc(N, sizeof(*tr));
+  unsigned short *ta = calloc(N, sizeof(*ta));
+  unsigned short (*lma)[K] = calloc(N, sizeof(*lma)); // lma[j][k] = fg[ma[j][k]]
+  unsigned short (*lpt)[K] = calloc(K, sizeof(*lpt)); // lpt[i][k] = fg[polynomial_table[k][i]]
+  unsigned short (*powers)[N] = calloc(K * 2, sizeof(*powers));
+  unsigned short (*polynomial_table)[K * 2] =
+      calloc(K * 2, sizeof(*polynomial_table));
+
+  if (tr == NULL || ta == NULL || lma == NULL || lpt == NULL ||
+      powers == NULL || polynomial_table == NULL)
+  {
+    fprintf(stderr, "mkg: failed to allocate key-generation workspace\n");
+    free(tr);
+    free(ta);
+    free(lma);
+    free(lpt);
+    free(powers);
+    free(polynomial_table);
+    return -1;
+  }
+
+  // 既約性判定のためのBen-Orアルゴリズム。既約多項式しか使わない。
+  const int max_polynomial_attempts = 10000;
+  bool found_valid_polynomial = false;
+
+  double t0 = now();   // ★計測用
+  int tries = 0;       // ★計測用
+
+  // 探索は逐次。見つかった時点で止める（共有変数の競合を避ける）
+  for (int attempt = 0;
+       attempt < max_polynomial_attempts && !found_valid_polynomial;
+       attempt++)
+  {
+    tries++;           // ★計測用
+
+    memset(pp.x, 0, sizeof(pp.x));
+    memset(tt.x, 0, sizeof(tt.x));
+
+    for (int i = 0; i < K; i++)
+      pp.x[i] = rand() % N;   // 暗号用途なので getrandom() 等への置き換え推奨
+    pp.x[K] = 1;
+
+    //mykey(tt.x, pp);
+    //tt.x[K] = 1;
+    //if (ben_or(v2o(tt)) < 0)
+    //  continue;
+
+    w = setpol(pp.x, K + 1);
+    polynomial = o2v(w);
+
+    // 各点の評価は独立なので、ここは並列化してよい
+    bool no_root = true;
+#pragma omp parallel for schedule(static) reduction(&&:no_root)
+    for (int i = 0; i < N; i++)
+    {
+      ta[i] = trace(polynomial, i);
+      if (ta[i] == 0)
+        no_root = false;
+    }
+    found_valid_polynomial = no_root;
+  }
+
+  if (!found_valid_polynomial)
+  {
+    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n",
+            max_polynomial_attempts);
+    free(tr);
+    free(ta);
+    free(lma);
+    free(lpt);
+    free(powers);
+    free(polynomial_table);
+    return -1;
+  }
+
+  printf("mkg-detail search: %.3f s (%d tries)\n", now() - t0, tries);   // ★計測用
+
+  for (int i = 0; i < N; i++)
+    tr[i] = oinv(ta[i]);
+
+  printpol(o2v(w));
+  printf(" =irreducible\n");
+  printsage(o2v(w));
+  printf("\n");
+
+  t0 = now();          // ★計測用(表示にかかった時間を除くため、ここで取り直す)
+
+  van(powers);
+  ogt(tt.x, polynomial_table);
+
+  printf("mkg-detail van+ogt: %.3f s\n", now() - t0); t0 = now();         // ★計測用
+
+  // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
+#pragma omp parallel for schedule(static)
+  for (int j = 0; j < N; j++)
+  {
+    for (int i = 0; i < K; i++)
+    {
+      unsigned short v = gf[mlt(fg[powers[i][j]], tr[j])];
+      lma[j][i] = fg[v];
+    }
+  }
+
+  // 転置しながら対数表現にして、内側ループを連続アクセスにする
+  for (int i = 0; i < K; i++)
+    for (int k = 0; k < K; k++)
+      lpt[i][k] = fg[polynomial_table[k][i]];
+
+  printf("mkg-detail lma+lpt: %.3f s\n", now() - t0); t0 = now();         // ★計測用
+
+  // matrix[j][i] = Σ_k polynomial_table[k][i] * ma[j][k]
+  // j ごとに別の行 matrix[j][*] にだけ書くので競合しない
+#pragma omp parallel for schedule(static)
+  for (int j = 0; j < N; j++)
+  {
+    for (int i = 0; i < K; i++)
+    {
+      unsigned short s = 0;
+      for (int k = 0; k < K; k++)
+        s ^= gf[mlt(lpt[i][k], lma[j][k])];
+      matrix[j][i] = s;
+    }
+  }
+
+  printf("mkg-detail matrix: %.3f s\n", now() - t0);                      // ★計測用
+  {
+    unsigned short (*chk)[K] = calloc(N, sizeof(*chk));
+    if (chk)
+    {
+      double th = now();
+      matrix_horner(&polynomial, tr, chk);
+      printf("mkg-detail horner: %.3f s\n", now() - th);
+      printf("mkg-detail horner check: %s\n",
+             memcmp(chk, matrix, (size_t)N * sizeof(*chk)) == 0 ? "OK" : "MISMATCH");
+      free(chk);
+    }
+  }
+  *result = o2v(w);
+  free(tr);
+  free(ta);
+  free(lma);
+  free(lpt);
+  free(powers);
+  free(polynomial_table);
+  return 0;
+}
+
+int mkg_ma(unsigned short matrix[N][K], vec *result)
 {
   OP w = {0};
   vec pp = {0}, tt = {0}, polynomial = {0};
@@ -2235,12 +2419,12 @@ int mkg(unsigned short matrix[N][K], vec *result)
       pp.x[i] = rand() % N;   // 暗号用途なので getrandom() 等への置き換え推奨
     pp.x[K] = 1;
 
-    mykey(tt.x, pp);
-    tt.x[K] = 1;
-    if (ben_or(v2o(tt)) < 0)
-      continue;
+    //mykey(tt.x, pp);
+    //tt.x[K] = 1;
+    //if (ben_or(v2o(tt)) < 0)
+    //  continue;
 
-    w = setpol(tt.x, K + 1);
+    w = setpol(pp.x, K + 1);
     polynomial = o2v(w);
 
     // 各点の評価は独立なので、ここは並列化してよい
@@ -2277,7 +2461,7 @@ int mkg(unsigned short matrix[N][K], vec *result)
   printf("\n");
 
   van(powers);
-  ogt(tt.x, polynomial_table);
+  ogt(pp.x, polynomial_table);
 
   // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
 #pragma omp parallel for schedule(static)
@@ -2330,9 +2514,10 @@ vec pubkeygen(unsigned short permutation[N],
   unsigned short (*field_matrix)[K] = calloc(N, sizeof(*field_matrix));
   MTX check_matrix = {0}, scrambler = {0}, public_check_matrix = {0};
   vec w = {0};
+  double t0 = now();
 
   if (field_matrix == NULL ||
-      matrix_init(&check_matrix, N, K * E) != 0 ||
+      //matrix_init(&check_matrix, N, K * E) != 0 ||
       matrix_init(&scrambler, K * E, K * E) != 0 ||
       matrix_init(inverse_scrambler, K * E, K * E) != 0)
   {
@@ -2357,6 +2542,7 @@ vec pubkeygen(unsigned short permutation[N],
   }
   printpol(w);
   printf(" ==goppa polynomial\n");
+  printf("Uh!-mkg: %.3f s\n", now() - t0); t0 = now();            // ← ② mkg の if ブロックの閉じ括弧の後
 
   //fp = fopen("sk.key", "wb");
   //fwrite(g, 2, K + 1, fp);
@@ -2367,8 +2553,8 @@ vec pubkeygen(unsigned short permutation[N],
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
 
-  bdet(field_matrix, &check_matrix);
-  free(field_matrix);
+  //bdet(field_matrix, &check_matrix);
+  //free(field_matrix);
 
   Pgen(permutation);
   fp = fopen("P.key", "w");
@@ -2378,6 +2564,8 @@ vec pubkeygen(unsigned short permutation[N],
     fprintf(stderr, "failed to generate a full-rank scrambler matrix\n");
     exit(EXIT_FAILURE);
   }
+  // random_full_rank_binary_matrix と is_reg の後
+  printf("Uh!-scrambler: %.3f s\n", now() - t0); t0 = now();
   if (is_reg(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
@@ -2410,22 +2598,43 @@ vec pubkeygen(unsigned short permutation[N],
   */
 
   //  exit(1);
-  if (mulmat(&scrambler, &check_matrix, 1, &public_check_matrix) != 0)
+  if (pubkey_pack(&scrambler, field_matrix, permutation, syndrome_matrix) != 0)
   {
-    fprintf(stderr, "pubkeygen: failed to multiply the check and scrambler matrices\n");
+    fprintf(stderr, "pubkeygen: failed to build the public key\n");
+    free(field_matrix);
     matrix_free(&check_matrix);
     matrix_free(&scrambler);
     matrix_free(&public_check_matrix);
     matrix_free(inverse_scrambler);
     exit(EXIT_FAILURE);
   }
-  toByte(&public_check_matrix, permutation, syndrome_matrix);
+  // pubkey_pack の後
+  printf("Uh!-pubkey_pack: %.3f s\n", now() - t0);
+  
+  // 一致確認(OK と出たら、このブロックは削除してよい)
+  /*
+  {
+    MTX cm = {0}, pc = {0};
+    unsigned short (*ref)[K] = calloc(N, sizeof *ref);
+    if (ref && matrix_init(&cm, N, K * E) == 0) {
+      //bdet(field_matrix, &cm);
+      mulmat(&scrambler, &cm, 1, &pc);
+      //toByte(&pc, permutation, ref);
+      printf("pubkey check: %s\n",
+             memcmp(ref, syndrome_matrix, (size_t)N * sizeof *ref) == 0 ? "OK" : "MISMATCH");
+    }
+    matrix_free(&cm); matrix_free(&pc); free(ref);
+  }
+*/
+
+  free(field_matrix);
 
   matrix_free(&check_matrix);
   matrix_free(&scrambler);
   matrix_free(&public_check_matrix);
   return w;
 }
+
 
 static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
 {

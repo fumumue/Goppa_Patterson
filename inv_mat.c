@@ -126,7 +126,208 @@ int matinv(const MTX *input, int n, MTX *inverse)
     return matrix_inverse(input, n, inverse);
 }
 
+
+// mulmat_gf2 より前に置く
+static inline void pack_elems(const unsigned short *elem, size_t kcnt,
+                              uint64_t *brow)   // brow は 0 クリア済み
+{
+    for (size_t j = 0; j < kcnt; ++j) {
+        size_t pos = j * E;
+        size_t w = pos / 64, s = pos % 64;
+        uint64_t v = elem[j] & ((1u << E) - 1);
+        brow[w] |= v << s;
+        if (s + E > 64)
+            brow[w + 1] |= v >> (64 - s);
+    }
+}
+
+
+#define CH 8
+
+static int mulmat_gf2(const MTX *A, const MTX *B,
+                      const unsigned short (*elems)[K],   // NULL なら B から読む
+                      size_t rows, size_t cols, size_t inner, MTX *result)
+{
+    const size_t win  = (inner + 63) / 64;
+    const size_t wout = (cols  + 63) / 64;
+    const size_t nch  = (inner + CH - 1) / CH;
+    const size_t TS   = (size_t)1 << CH;
+
+    uint64_t *at  = calloc(inner * wout, sizeof *at);
+    uint64_t *tbl = calloc(nch * TS * wout, sizeof *tbl);
+    if (!at || !tbl) { free(at); free(tbl); return -1; }
+
+    for (size_t c = 0; c < cols; ++c)
+        for (size_t k = 0; k < inner; ++k) {
+            if (A->x[c][k] > 1) { free(at); free(tbl); return -1; }
+            at[k * wout + c / 64] |= (uint64_t)A->x[c][k] << (c % 64);
+        }
+
+    for (size_t ch = 0; ch < nch; ++ch) {
+        uint64_t *t = tbl + ch * TS * wout;
+        for (unsigned v = 1; v < TS; ++v) {
+            unsigned low = v & (0u - v);
+            size_t k = ch * CH + (size_t)__builtin_ctz(low);
+            const uint64_t *prev = t + (size_t)(v ^ low) * wout;
+            for (size_t w = 0; w < wout; ++w)
+                t[(size_t)v * wout + w] =
+                    prev[w] ^ (k < inner ? at[k * wout + w] : 0);
+        }
+    }
+
+    int bad = 0;
+    #pragma omp parallel for schedule(static) reduction(|:bad)
+    for (size_t r = 0; r < rows; ++r) {
+        uint64_t brow[win], acc[wout];
+        memset(brow, 0, sizeof brow);
+        memset(acc, 0, sizeof acc);
+
+        if (elems) {
+            pack_elems(elems[r], inner / E, brow);
+        } else {
+            for (size_t k = 0; k < inner; ++k) {
+                unsigned short b = B->x[r][k];
+                if (b > 1) { bad = 1; break; }
+                brow[k / 64] |= (uint64_t)b << (k % 64);
+            }
+            if (bad) continue;
+        }
+
+        for (size_t ch = 0; ch < nch; ++ch) {
+            size_t bit = ch * CH;
+            unsigned v = (unsigned)(brow[bit / 64] >> (bit % 64)) & (unsigned)(TS - 1);
+            const uint64_t *t = tbl + (ch * TS + v) * wout;
+            for (size_t w = 0; w < wout; ++w) acc[w] ^= t[w];
+        }
+        for (size_t c = 0; c < cols; ++c)
+            result->x[r][c] = (acc[c / 64] >> (c % 64)) & 1;
+    }
+    free(at); free(tbl);
+    return bad ? -1 : 0;
+}
+
+int pubkey_pack(const MTX *scrambler,
+                unsigned short field_matrix[N][K],
+                const unsigned short permutation[N],
+                unsigned short syndrome_matrix[N][K])
+{
+    const size_t nbits = (size_t)K * E;            // 3328
+    const size_t words = (nbits + 63) / 64;        // 52
+    const size_t nch   = (nbits + CH - 1) / CH;
+    const size_t TS    = (size_t)1 << CH;
+
+    if (scrambler == NULL || scrambler->x == NULL ||
+        scrambler->rows != nbits || scrambler->cols != nbits)
+        return -1;
+
+    uint64_t *at  = calloc(nbits * words, sizeof *at);
+    uint64_t *tbl = calloc(nch * TS * words, sizeof *tbl);
+    uint64_t *out = calloc((size_t)N * words, sizeof *out);
+    if (!at || !tbl || !out) { free(at); free(tbl); free(out); return -1; }
+
+    // S^T を詰める: at[k] の第 c ビット = S[c][k]
+    for (size_t c = 0; c < nbits; ++c)
+        for (size_t k = 0; k < nbits; ++k) {
+            if (scrambler->x[c][k] > 1) { free(at); free(tbl); free(out); return -1; }
+            at[k * words + c / 64] |= (uint64_t)scrambler->x[c][k] << (c % 64);
+        }
+
+    // 表: tbl[ch][v] = その塊で v のビットが立つ行の XOR
+    for (size_t ch = 0; ch < nch; ++ch) {
+        uint64_t *t = tbl + ch * TS * words;
+        for (unsigned v = 1; v < TS; ++v) {
+            unsigned low = v & (0u - v);
+            size_t k = ch * CH + (size_t)__builtin_ctz(low);
+            const uint64_t *prev = t + (size_t)(v ^ low) * words;
+            for (size_t w = 0; w < words; ++w)
+                t[(size_t)v * words + w] =
+                    prev[w] ^ (k < nbits ? at[k * words + w] : 0);
+        }
+    }
+
+    // 各行: 要素 → 詰めたビット → 表引きで XOR
+    #pragma omp parallel for schedule(static)
+    for (size_t r = 0; r < N; ++r) {
+        uint64_t brow[words];
+        uint64_t *acc = out + r * words;
+        memset(brow, 0, sizeof brow);
+        pack_elems(field_matrix[r], K, brow);
+        for (size_t ch = 0; ch < nch; ++ch) {
+            size_t bit = ch * CH;
+            unsigned v = (unsigned)(brow[bit / 64] >> (bit % 64)) & (unsigned)(TS - 1);
+            const uint64_t *t = tbl + (ch * TS + v) * words;
+            for (size_t w = 0; w < words; ++w) acc[w] ^= t[w];
+        }
+    }
+
+    // permutation で並べ替えながら 13 ビット要素に戻す(toByte の代わり)
+    int bad = 0;
+    for (size_t i = 0; i < N; ++i) {
+        if (permutation[i] >= N) { bad = 1; break; }
+        const uint64_t *o = out + (size_t)permutation[i] * words;
+        for (size_t j = 0; j < K; ++j) {
+            size_t pos = j * E, w = pos / 64, s = pos % 64;
+            uint64_t v = o[w] >> s;
+            if (s + E > 64) v |= o[w + 1] << (64 - s);
+            syndrome_matrix[i][j] = (unsigned short)(v & (((uint64_t)1 << E) - 1));
+        }
+    }
+    free(at); free(tbl); free(out);
+    return bad ? -1 : 0;
+}
+
 int mulmat(const MTX *A, const MTX *B, int mode, MTX *result)
+{
+    if (A == NULL || B == NULL || result == NULL ||
+        result == A || result == B ||
+        A->x == NULL || B->x == NULL)
+        return -1;
+
+    size_t rows, cols, inner;
+    if (mode == 1) {
+        if (A->rows != A->cols || A->cols != B->cols)
+            return -1;
+        rows = B->rows;
+        cols = A->rows;
+        inner = A->cols;
+    } else if (mode == 2) {
+        size_t half = (size_t)E * (K / 2 + 1);
+        if (A->rows < half || A->cols < half ||
+            B->rows < N || B->cols < half)
+            return -1;
+        rows = N;
+        cols = half;
+        inner = half;
+    } else if (mode == 3) {
+        if (A->cols != B->rows)
+            return -1;
+        rows = A->rows;
+        cols = B->cols;
+        inner = A->cols;
+    } else {
+        return -1;
+    }
+
+    if (matrix_init(result, rows, cols) != 0)
+        return -1;
+
+    if (mode == 1 || mode == 2)
+        return mulmat_gf2(A, B, NULL, rows, cols, inner, result); 
+    
+    // mode 3 は元のまま
+    for (size_t r = 0; r < rows; ++r) {
+        for (size_t c = 0; c < cols; ++c) {
+            unsigned short value = 0;
+            for (size_t k = 0; k < inner; ++k)
+                value ^= (unsigned short)mlt(A->x[r][k], B->x[k][c]);
+            result->x[r][c] = value;
+        }
+    }
+    return 0;
+}
+
+
+int mulmat2(const MTX *A, const MTX *B, int mode, MTX *result)
 {
     if (A == NULL || B == NULL || result == NULL ||
         result == A || result == B ||

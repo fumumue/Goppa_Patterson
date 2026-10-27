@@ -1,4 +1,4 @@
-CC ?= gcc
+CC ?= clang
 BUILD_DIR := build
 TARGET := $(BUILD_DIR)/patterson
 TEST_TARGET := $(BUILD_DIR)/pointer-equivalence

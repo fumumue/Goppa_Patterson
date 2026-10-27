@@ -55,6 +55,101 @@ int matrix_copy(MTX *destination, const MTX *source)
   return 0;
 }
 
+#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <limits.h>
+
+/* 64ビット整数行列 */
+typedef struct
+{
+    uint64_t **x;
+    uint64_t *storage;
+    size_t rows;
+    size_t cols;
+} MTX64;
+
+/*
+ * 64ビット整数行列の論理演算による積
+ *
+ * A: rows × inner
+ * B: inner × cols
+ * result: rows × cols
+ *
+ * 各要素は64ビットのビット列。
+ * 積は AND、和は XOR。
+ *
+ * result は初期化されていない MTX64 を渡す。
+ * 成功時 0、失敗時 -1。
+ */
+int mulmat64(const MTX64 *A, const MTX64 *B, MTX64 *result)
+{
+    if (A == NULL || B == NULL || result == NULL ||
+        A == result || B == result ||
+        A->x == NULL || B->x == NULL ||
+        A->cols != B->rows)
+        return -1;
+
+    size_t rows = A->rows;
+    size_t inner = A->cols;
+    size_t cols = B->cols;
+
+    if (rows == 0 || inner == 0 || cols == 0 ||
+        rows > SIZE_MAX / sizeof(uint64_t *) ||
+        cols > SIZE_MAX / sizeof(uint64_t))
+        return -1;
+
+    uint64_t **out = calloc(rows, sizeof(*out));
+    uint64_t *storage = calloc(rows * cols, sizeof(*storage));
+
+    if (out == NULL || storage == NULL)
+    {
+        free(out);
+        free(storage);
+        return -1;
+    }
+
+    for (size_t i = 0; i < rows; ++i)
+        out[i] = storage + i * cols;
+
+    for (size_t i = 0; i < rows; ++i)
+    {
+        for (size_t j = 0; j < cols; ++j)
+        {
+            uint64_t value = 0;
+
+            for (size_t k = 0; k < inner; ++k)
+                value ^= A->x[i][k] & B->x[k][j];
+
+            out[i][j] = value;
+        }
+    }
+
+    result->x = out;
+    result->storage = storage;
+    result->rows = rows;
+    result->cols = cols;
+
+    return 0;
+}
+
+/* 64ビット整数行列の解放 */
+void matrix64_free(MTX64 *matrix)
+{
+    if (matrix == NULL)
+        return;
+
+    free(matrix->storage);
+    free(matrix->x);
+
+    matrix->x = NULL;
+    matrix->storage = NULL;
+    matrix->rows = 0;
+    matrix->cols = 0;
+}
+
+
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
 {
   /* Keep one reduced basis row per pivot, packed to avoid cubic bit loops. */

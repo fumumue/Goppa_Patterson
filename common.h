@@ -60,5 +60,8 @@ void matrix_free(MTX *matrix);
 int matrix_copy(MTX *destination, const MTX *source);
 int mulmat(const MTX *A, const MTX *B, int flg, MTX *result);
 void mmul(const MTX *A, const MTX *B);
-
+int pubkey_pack(const MTX *scrambler,
+                unsigned short field_matrix[N][K],
+                const unsigned short permutation[N],
+                unsigned short syndrome_matrix[N][K]);
 #endif
