@@ -2206,7 +2206,6 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
-
 // matrix[j][i] = (Σ_{m=0}^{i} g[m]·α_j^(i-m)) / g(α_j),  α_j = j
 static void matrix_horner(const vec *polynomial,
                           const unsigned short *tr,   // tr[j] = oinv(g(j))
@@ -2295,8 +2294,7 @@ int mkg(unsigned short matrix[N][K], vec *result)
 
   if (!found_valid_polynomial)
   {
-    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n",
-            max_polynomial_attempts);
+    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n", max_polynomial_attempts);
     free(tr);
     free(ta);
     free(lma);
@@ -2316,12 +2314,12 @@ int mkg(unsigned short matrix[N][K], vec *result)
   printsage(o2v(w));
   printf("\n");
 
-  t0 = now();          // ★計測用(表示にかかった時間を除くため、ここで取り直す)
-
   van(powers);
-  ogt(tt.x, polynomial_table);
+  ogt(pp.x, polynomial_table);
 
-  printf("mkg-detail van+ogt: %.3f s\n", now() - t0); t0 = now();         // ★計測用
+  t0 = now();          // ★計測用(表示にかかった時間を除くため、ここで取り直す)
+  matrix_horner(&polynomial, tr, matrix);   // ← これだけ  
+
 
   // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
 #pragma omp parallel for schedule(static)
@@ -2368,13 +2366,17 @@ int mkg(unsigned short matrix[N][K], vec *result)
       free(chk);
     }
   }
+    
   *result = o2v(w);
+/*
   free(tr);
   free(ta);
   free(lma);
   free(lpt);
   free(powers);
   free(polynomial_table);
+  */
+
   return 0;
 }
 
@@ -2461,7 +2463,7 @@ int mkg_ma(unsigned short matrix[N][K], vec *result)
   printf("\n");
 
   van(powers);
-  ogt(pp.x, polynomial_table);
+  ogt(tt.x, polynomial_table);
 
   // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
 #pragma omp parallel for schedule(static)
@@ -2559,6 +2561,7 @@ vec pubkeygen(unsigned short permutation[N],
   Pgen(permutation);
   fp = fopen("P.key", "w");
   fclose(fp);
+
   if (random_full_rank_binary_matrix(&scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to generate a full-rank scrambler matrix\n");
@@ -2571,7 +2574,15 @@ vec pubkeygen(unsigned short permutation[N],
     fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
     exit(EXIT_FAILURE);
   }
-
+  
+  /*
+    if (random_full_rank_binary_matrix_inv(&scrambler, inverse_scrambler, rng) != 0)
+  {
+    fprintf(stderr, "failed to generate the scrambler matrix and its inverse\n");
+    exit(EXIT_FAILURE);
+  }
+  */
+  printf("Uh!-scrambler+inverse: %.3f s\n", now() - t0); t0 = now();
   /*
     fp = fopen("inv_S.key", "wb");
   for(i=0;i<K*E;i++){

@@ -142,9 +142,93 @@ static inline void pack_elems(const unsigned short *elem, size_t kcnt,
 }
 
 
-#define CH 8
+#define CH 4
+#define WB 4   // 出力側のスライス幅(語)。8語 = 64B = 1キャッシュライン
 
 static int mulmat_gf2(const MTX *A, const MTX *B,
+                      const unsigned short (*elems)[K],
+                      size_t rows, size_t cols, size_t inner, MTX *result)
+{
+    const size_t win  = (inner + 63) / 64;
+    const size_t wout = (cols  + 63) / 64;
+    const size_t nch  = (inner + CH - 1) / CH;
+    const size_t TS   = (size_t)1 << CH;
+    const size_t nsl  = (wout + WB - 1) / WB;
+
+    uint64_t *at   = calloc(inner * wout, sizeof *at);
+    uint64_t *brow = calloc(rows * win,   sizeof *brow);
+    uint64_t *accs = calloc(rows * wout,  sizeof *accs);
+    uint64_t *tbl  = aligned_alloc(64, nch * TS * WB * sizeof *tbl);
+    int bad = 0;
+    if (!at || !brow || !accs || !tbl) goto fail;
+
+    for (size_t c = 0; c < cols; ++c)
+        for (size_t k = 0; k < inner; ++k) {
+            if (A->x[c][k] > 1) goto fail;
+            at[k * wout + c / 64] |= (uint64_t)A->x[c][k] << (c % 64);
+        }
+
+    #pragma omp parallel for schedule(static) reduction(|:bad)
+    for (size_t r = 0; r < rows; ++r) {
+        uint64_t *br = brow + r * win;
+        if (elems) {
+            pack_elems(elems[r], inner / E, br);
+        } else {
+            for (size_t k = 0; k < inner; ++k) {
+                unsigned short b = B->x[r][k];
+                if (b > 1) { bad = 1; break; }
+                br[k / 64] |= (uint64_t)b << (k % 64);
+            }
+        }
+    }
+    if (bad) goto fail;
+
+    memset(tbl, 0, nch * TS * WB * sizeof *tbl);   // v=0 の行は0のまま使う
+    for (size_t s = 0; s < nsl; ++s) {
+        const size_t w0 = s * WB;
+        const size_t wn = (wout - w0 < WB) ? wout - w0 : WB;
+
+        for (size_t ch = 0; ch < nch; ++ch) {
+            uint64_t *t = tbl + ch * TS * WB;
+            for (unsigned v = 1; v < TS; ++v) {
+                unsigned low = v & (0u - v);
+                size_t k = ch * CH + (size_t)__builtin_ctz(low);
+                const uint64_t *prev = t + (size_t)(v ^ low) * WB;
+                for (size_t j = 0; j < WB; ++j)
+                    t[(size_t)v * WB + j] =
+                        prev[j] ^ ((k < inner && j < wn) ? at[k * wout + w0 + j] : 0);
+            }
+        }
+
+        #pragma omp parallel for schedule(static)
+        for (size_t r = 0; r < rows; ++r) {
+            const uint64_t *br = brow + r * win;
+            uint64_t acc[WB] = {0};
+            for (size_t ch = 0; ch < nch; ++ch) {
+                size_t bit = ch * CH;
+                unsigned v = (unsigned)(br[bit / 64] >> (bit % 64)) & (unsigned)(TS - 1);
+                const uint64_t *t = tbl + (ch * TS + v) * WB;
+                for (size_t j = 0; j < WB; ++j) acc[j] ^= t[j];
+            }
+            for (size_t j = 0; j < wn; ++j)
+                accs[r * wout + w0 + j] = acc[j];
+        }
+    }
+
+    #pragma omp parallel for schedule(static)
+    for (size_t r = 0; r < rows; ++r)
+        for (size_t c = 0; c < cols; ++c)
+            result->x[r][c] = (accs[r * wout + c / 64] >> (c % 64)) & 1;
+
+    free(at); free(brow); free(accs); free(tbl);
+    return 0;
+fail:
+    free(at); free(brow); free(accs); free(tbl);
+    return -1;
+}
+
+
+static int mulmat_gf2a(const MTX *A, const MTX *B,
                       const unsigned short (*elems)[K],   // NULL なら B から読む
                       size_t rows, size_t cols, size_t inner, MTX *result)
 {
@@ -276,6 +360,8 @@ int pubkey_pack(const MTX *scrambler,
     return bad ? -1 : 0;
 }
 
+
+
 int mulmat(const MTX *A, const MTX *B, int mode, MTX *result)
 {
     if (A == NULL || B == NULL || result == NULL ||
@@ -312,8 +398,8 @@ int mulmat(const MTX *A, const MTX *B, int mode, MTX *result)
         return -1;
 
     if (mode == 1 || mode == 2)
-        return mulmat_gf2(A, B, NULL, rows, cols, inner, result); 
-    
+        return mulmat_gf2(A, B, NULL, rows, cols, inner, result);
+
     // mode 3 は元のまま
     for (size_t r = 0; r < rows; ++r) {
         for (size_t c = 0; c < cols; ++c) {

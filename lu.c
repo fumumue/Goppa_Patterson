@@ -55,98 +55,143 @@ int matrix_copy(MTX *destination, const MTX *source)
   return 0;
 }
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <limits.h>
 
-/* 64ビット整数行列 */
-typedef struct
-{
-    uint64_t **x;
-    uint64_t *storage;
-    size_t rows;
-    size_t cols;
-} MTX64;
+// S と S^{-1} を同時に作る。従属な行はその行だけ作り直す。
+int random_full_rank_binary_matrix_inv(MTX *S, MTX *Sinv, RNG *rng)
+{ 
+  if (S == NULL || Sinv == NULL || rng == NULL ||
+      S->x == NULL || Sinv->x == NULL ||
+      S->storage == NULL || Sinv->storage == NULL ||
+      S->rows == 0 || S->rows != S->cols ||
+      Sinv->rows != S->rows || Sinv->cols != S->cols)
+  {
+    fprintf(stderr, "invalid matrix arguments for scrambler generation\n");
+    return -1;
+  }
 
-/*
- * 64ビット整数行列の論理演算による積
- *
- * A: rows × inner
- * B: inner × cols
- * result: rows × cols
- *
- * 各要素は64ビットのビット列。
- * 積は AND、和は XOR。
- *
- * result は初期化されていない MTX64 を渡す。
- * 成功時 0、失敗時 -1。
- */
-int mulmat64(const MTX64 *A, const MTX64 *B, MTX64 *result)
-{
-    if (A == NULL || B == NULL || result == NULL ||
-        A == result || B == result ||
-        A->x == NULL || B->x == NULL ||
-        A->cols != B->rows)
-        return -1;
+  const size_t n = S->rows;
+  const size_t words = (n + 63) / 64;
+  if (n > SIZE_MAX / words || n * words > SIZE_MAX / sizeof(uint64_t))
+    return -1;
 
-    size_t rows = A->rows;
-    size_t inner = A->cols;
-    size_t cols = B->cols;
+  uint64_t *basis = calloc(n * words, sizeof *basis); // basis[p]: 最下位ビットが p の行
+  uint64_t *track = calloc(n * words, sizeof *track); // basis[p] = track[p] に立つ S の行の和
+  uint64_t *inv   = calloc(n * words, sizeof *inv);   // S^{-1} (ビットパック)
+  uint64_t *cand  = malloc(words * sizeof *cand);
+  uint64_t *red   = malloc(words * sizeof *red);
+  uint64_t *trk   = malloc(words * sizeof *trk);
+  unsigned char *used = calloc(n, 1);
+  int rc = -1;
 
-    if (rows == 0 || inner == 0 || cols == 0 ||
-        rows > SIZE_MAX / sizeof(uint64_t *) ||
-        cols > SIZE_MAX / sizeof(uint64_t))
-        return -1;
+  if (!basis || !track || !inv || !cand || !red || !trk || !used)
+  {
+    fprintf(stderr, "failed to allocate scrambler generation workspace\n");
+    goto done;
+  }
 
-    uint64_t **out = calloc(rows, sizeof(*out));
-    uint64_t *storage = calloc(rows * cols, sizeof(*storage));
+  for (size_t row = 0; row < n; row++)
+  {
+    const size_t trk_words = row / 64 + 1;   // 追跡ベクトルは 0..row のビットだけ使う
+    bool accepted = false;
 
-    if (out == NULL || storage == NULL)
+    for (int attempt = 0; attempt < 4096 && !accepted; attempt++)
     {
-        free(out);
-        free(storage);
-        return -1;
-    }
+      memset(cand, 0, words * sizeof *cand);
+      for (size_t col = 0; col < n; col++)
+        cand[col / 64] |= (uint64_t)(xor128(rng) & 1UL) << (col % 64);
 
-    for (size_t i = 0; i < rows; ++i)
-        out[i] = storage + i * cols;
+      memcpy(red, cand, words * sizeof *red);
+      memset(trk, 0, trk_words * sizeof *trk);
+      trk[row / 64] |= UINT64_C(1) << (row % 64);
 
-    for (size_t i = 0; i < rows; ++i)
-    {
-        for (size_t j = 0; j < cols; ++j)
+      for (size_t p = 0; p < n; p++)
+      {
+        if (!used[p] || !packed_bit(red, p))
+          continue;
+        const uint64_t *b = basis + p * words;
+        const uint64_t *t = track + p * words;
+        for (size_t w = p / 64; w < words; w++)
+          red[w] ^= b[w];
+        for (size_t w = 0; w < trk_words; w++)
+          trk[w] ^= t[w];
+      }
+
+      size_t q = n;
+      for (size_t w = 0; w < words; w++)
+        if (red[w] != 0)
         {
-            uint64_t value = 0;
-
-            for (size_t k = 0; k < inner; ++k)
-                value ^= A->x[i][k] & B->x[k][j];
-
-            out[i][j] = value;
+          q = w * 64 + (size_t)__builtin_ctzll(red[w]);
+          break;
         }
+      if (q == n)
+        continue;                             // 従属: この行だけ作り直す
+
+      memcpy(basis + q * words, red, words * sizeof *red);
+      memcpy(track + q * words, trk, trk_words * sizeof *trk);
+      used[q] = 1;
+
+      for (size_t col = 0; col < n; col++)
+        S->x[row][col] = (cand[col / 64] >> (col % 64)) & 1;
+      accepted = true;
     }
 
-    result->x = out;
-    result->storage = storage;
-    result->rows = rows;
-    result->cols = cols;
+    if (!accepted)
+    {
+      fprintf(stderr, "scrambler: no independent row at row %zu of %zu\n", row, n);
+      goto done;
+    }
+  }
 
-    return 0;
-}
+  // B = T·S  (B は対角が1の上三角)。S^{-1} = B^{-1}·T を後退代入で求める。
+  //   inv[p] = track[p] ^ XOR_{q>p, B[p][q]=1} inv[q]
+  // 語ごとに独立なので、語のブロック単位で並列化する。
+  {
+    const size_t WB = 8;
+    const size_t nblk = (words + WB - 1) / WB;
 
-/* 64ビット整数行列の解放 */
-void matrix64_free(MTX64 *matrix)
-{
-    if (matrix == NULL)
-        return;
+#pragma omp parallel for schedule(static)
+    for (size_t blk = 0; blk < nblk; blk++)
+    {
+      const size_t w0 = blk * WB;
+      const size_t w1 = (w0 + WB < words) ? w0 + WB : words;
 
-    free(matrix->storage);
-    free(matrix->x);
+      for (size_t p = n; p-- > 0;)
+      {
+        uint64_t *xp = inv + p * words;
+        const uint64_t *bp = basis + p * words;
+        for (size_t w = w0; w < w1; w++)
+          xp[w] = track[p * words + w];
 
-    matrix->x = NULL;
-    matrix->storage = NULL;
-    matrix->rows = 0;
-    matrix->cols = 0;
+        for (size_t wi = p / 64; wi < words; wi++)
+        {
+          uint64_t bits = bp[wi];
+          if (wi == p / 64)
+            bits &= ~((UINT64_C(2) << (p % 64)) - 1);   // q > p だけ残す
+          while (bits)
+          {
+            size_t q = wi * 64 + (size_t)__builtin_ctzll(bits);
+            bits &= bits - 1;
+            const uint64_t *xq = inv + q * words;
+            for (size_t w = w0; w < w1; w++)
+              xp[w] ^= xq[w];
+          }
+        }
+      }
+    }
+  }
+
+  for (size_t r = 0; r < n; r++)
+    for (size_t c = 0; c < n; c++)
+      Sinv->x[r][c] = (inv[r * words + c / 64] >> (c % 64)) & 1;
+  rc = 0;
+
+done:
+  if (rc != 0 && S != NULL && S->storage != NULL)
+    memset(S->storage, 0, S->rows * S->cols * sizeof(*S->storage));
+  free(basis); free(track); free(inv);
+  free(cand);  free(red);   free(trk);
+  free(used);
+  return rc;
 }
 
 
@@ -184,6 +229,10 @@ int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
     for (int attempt = 0; attempt < 4096 && !accepted; attempt++)
     {
       memset(candidate, 0, words * sizeof(*candidate));
+      for (size_t w = 0; w < words; w++)
+        candidate[w] = (uint64_t)xor128(rng);
+      if (n % 64)
+        candidate[words - 1] &= (UINT64_C(1) << (n % 64)) - 1;
       for (size_t col = 0; col < n; col++)
         candidate[col / 64] |= (uint64_t)(xor128(rng) & 1UL) << (col % 64);
       memcpy(reduced, candidate, words * sizeof(*reduced));
@@ -241,6 +290,33 @@ int random_full_rank_binary_matrix(MTX *matrix, RNG *rng)
   free(reduced);
   return 0;
 }
+
+
+static int check_inverse(const MTX *S, const MTX *Sinv, RNG *rng)
+{
+  size_t n = S->rows;
+  unsigned short *v = malloc(n * sizeof *v), *y = malloc(n * sizeof *y);
+  int ok = (v && y);
+  for (int t = 0; ok && t < 8; t++)
+  {
+    for (size_t i = 0; i < n; i++) v[i] = xor128(rng) & 1UL;
+    for (size_t i = 0; i < n; i++)
+    {
+      unsigned short s = 0;
+      for (size_t j = 0; j < n; j++) s ^= Sinv->x[i][j] & v[j];
+      y[i] = s;
+    }
+    for (size_t i = 0; i < n; i++)
+    {
+      unsigned short s = 0;
+      for (size_t j = 0; j < n; j++) s ^= S->x[i][j] & y[j];
+      if (s != v[i]) { ok = 0; break; }
+    }
+  }
+  free(v); free(y);
+  return ok ? 0 : -1;
+}
+
 
 int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
 {
@@ -310,16 +386,24 @@ int is_reg(const MTX *cc_input, MTX *R, RNG *rng)
       }
     }
 
+    
+    //#pragma omp parallel for schedule(static)
     for (size_t row = 0; row < n; row++)
     {
       if (row == col || !packed_bit(reduced + row * words, col))
         continue;
 
+      for (size_t word = col / 64; word < words; word++)
+        reduced[row * words + word] ^= reduced[col * words + word];
+      for (size_t word = 0; word < words; word++)
+        inverse[row * words + word] ^= inverse[col * words + word];
+      /*
       for (size_t word = 0; word < words; word++)
       {
         reduced[row * words + word] ^= reduced[col * words + word];
         inverse[row * words + word] ^= inverse[col * words + word];
       }
+      */
     }
   }
 
