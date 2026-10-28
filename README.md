@@ -61,10 +61,13 @@ $\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
   ($E$ は誤り位置の集合)
 - 誤り位置多項式:
   $$\sigma(x) = \prod_{i \in E} (x - \alpha_i)$$
-- 二元の場合、形式微分 $\sigma'(x)$ は $\sigma$ を偶数部と奇数部に分けて
+- 二元の場合、形式微分 $\sigma'(x)$
+  は $\sigma$ を偶数部と奇数部に分けて
   $$\sigma(x) = a(x)^2 + x\, b(x)^2,\quad \sigma'(x) = b(x)^2$$
-  と書けます($\deg a \le \lfloor t/2 \rfloor$、$\deg b \le \lfloor (t-1)/2 \rfloor$)。
-- 鍵方程式:$$S(x)\,\sigma(x) \equiv \sigma'(x) \pmod{g(x)}$$
+  と書けます($\deg a \le \lfloor t/2 \rfloor$、
+  $\deg b \le \lfloor (t-1)/2 \rfloor$)。
+- 鍵方程式:
+  $$S(x)\,\sigma(x) \equiv \sigma'(x) \pmod{g(x)}$$
 
 #### 手順
 
