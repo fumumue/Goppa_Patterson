@@ -4,9 +4,9 @@ TARGET := $(BUILD_DIR)/patterson
 TEST_TARGET := $(BUILD_DIR)/pointer-equivalence
 
 CPPFLAGS ?=
-CFLAGS ?= -Wall -g -O3 -mavx -mavx2 -mtune=native -march=native -ffast-math -funroll-loops
+CFLAGS ?= -Wall -g -O3 -mavx -mavx2 -mtune=native -march=native -ffast-math -funroll-loops 
 OPENMP_FLAGS ?= -fopenmp
-DEPFLAGS := -MMD -MP
+DEPFLAGS := -MMD -MP -DNDEBUG
 LDFLAGS ?= -flto
 LDLIBS ?=
 

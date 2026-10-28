@@ -1245,6 +1245,7 @@ static OP bib(int i, OP d, const OP ww[T])
   return t;
 }
 
+
 // chen探索
 static vec chen(vec f)
 {
@@ -2150,6 +2151,15 @@ vec renritu(const MTX *input)
   return v;
 }
 
+static inline unsigned short eval(const unsigned short *c, unsigned short lx)
+{
+  unsigned short q = c[K];
+  for (int i = K - 1; i >= 0; i--)
+    q = gf[mlt(fg[q], lx)] ^ c[i];
+  return q;
+}
+
+
 /* input: f, element in GF((2^m)^t) */
 /* output: out, minimal polynomial of f */
 /* return: 0 for success and -1 for failure */
@@ -2227,6 +2237,42 @@ static void matrix_horner(const vec *polynomial,
 
 
 int mkg(unsigned short matrix[N][K], vec *result)
+{
+  OP w = {0};
+  vec pp = {0}, polynomial = {0};
+  unsigned short *tr = calloc(N, sizeof(*tr));
+  unsigned short *ta = calloc(N, sizeof(*ta));
+  if (!tr || !ta) { free(tr); free(ta); return -1; }
+
+  bool found = false;
+  for (int attempt = 0; attempt < 10000 && !found; attempt++)
+  {
+    memset(pp.x, 0, sizeof(pp.x));
+    for (int i = 0; i < K; i++) pp.x[i] = rand() % N;
+    pp.x[K] = 1;
+    w = setpol(pp.x, K + 1);
+    polynomial = o2v(w);
+
+    bool no_root = true;
+#pragma omp parallel for schedule(static) reduction(&&:no_root)
+    for (int i = 0; i < N; i++)
+    {
+      ta[i] = i ? eval(polynomial.x, fg[i]) : polynomial.x[0];
+      if (ta[i] == 0) no_root = false;
+    }
+    found = no_root;
+  }
+  if (!found) { free(tr); free(ta); return -1; }
+
+  for (int i = 0; i < N; i++) tr[i] = oinv(ta[i]);
+  matrix_horner(&pp, tr, matrix);
+  *result = o2v(w);
+  free(tr); free(ta);
+  return 0;
+}
+
+
+int mkg0(unsigned short matrix[N][K], vec *result)
 {
   OP w = {0};
   vec pp = {0}, tt = {0}, polynomial = {0};
@@ -2318,7 +2364,7 @@ int mkg(unsigned short matrix[N][K], vec *result)
   ogt(pp.x, polynomial_table);
 
   t0 = now();          // ★計測用(表示にかかった時間を除くため、ここで取り直す)
-  matrix_horner(&polynomial, tr, matrix);   // ← これだけ  
+  matrix_horner(&pp, tr, matrix);   // ← これだけ  
 
 
   // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）

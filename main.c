@@ -70,8 +70,8 @@ int main(void)
   }
   gen_gf(E, N, 1);
 
-  for (int i = 0; i < N; i++)
-    printf("%d %d\n", oinv(i), oinv2(i));
+  //for (int i = 0; i < N; i++)
+  //  printf("%d %d\n", oinv(i), oinv2(i));
 
   w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
