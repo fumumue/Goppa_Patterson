@@ -53,7 +53,7 @@ vec zin(const MTX *inverse_scrambler,
         unsigned short zz[]);
 vec paloma(OP w,OP f);
 vec patterson(vec w, vec f);
-int ero2(vec v, const unsigned short permutation[N]);
+//int ero2(vec v, const unsigned short permutation[N]);
 void printpol(vec a);
 vec vadd(vec a, vec b);
 vec vmul(vec a, vec b);
@@ -61,6 +61,7 @@ vec fmul(vec a, vec b);
 OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
 
+int ero2(vec v, const unsigned short permutation[N],unsigned short *ya);
 int mkg(unsigned short matrix[N][K], vec *result);
 int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng);

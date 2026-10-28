@@ -46,6 +46,49 @@ static int verify_decode_result(vec decoded,
   return valid;
 }
 
+// 復号したエラー d と、正解の z1 を比べる。誤り位置が完全に一致なら PASS
+static int check_decode(const unsigned short *d, const unsigned short *z1, int n)
+{
+    int ok = 1;
+    for (int i = 0; i < n; i++)
+    {
+        if ((d[i] != 0) != (z1[i] != 0)) { ok = 0; break; }
+    }
+
+    printf("decode check: %s\n", ok ? "PASS" : "FAIL");
+
+    printf("decoded error positions:");
+    for (int i = 0; i < n; i++)
+        if (d[i] != 0) printf(" %d", i);
+    printf("\n");
+
+    return ok;
+}
+
+
+// e: 本当の誤り (長さ n), d: 復号結果 (長さ n)。誤り位置が非0
+// 戻り値: 本当の誤りのうち、正しく見つかった個数
+static int count_correct_old(const unsigned short *e, const unsigned short *d,
+                         int n, int *T_out, int *extra)
+{
+    int t = 0, hit = 0, ex = 0;
+
+    for (int i = 0; i < n; i++)
+    {
+        int ei = (e[i] != 0);
+        int di = (d[i] != 0);
+
+        if (ei) t++;
+        if (ei && di) hit++;
+        if (!ei && di) ex++;
+    }
+
+    if (T_out) *T_out = t;
+    if (extra) *extra = ex;
+    return hit;
+}
+
+
 int main(void)
 {
   unsigned short *z1 = calloc(N, sizeof(*z1));
@@ -79,7 +122,7 @@ int main(void)
   w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
   memset(z1, 0, (size_t)N * sizeof(*z1));
-  if (mkerr(z1, K, &rng) != 0)
+  if (mkerr(z1, rand()%K+1, &rng) != 0)
   {
     free(z1);
     free(permutation);
@@ -93,32 +136,51 @@ int main(void)
   printf(" ==syndrome\n");
 
 
-  v=paloma(v2o(f),v2o(w));
-  //v = patterson(w, f);
+  unsigned short ya[N] = {0};
 
-  int decoded_count = 0, expected_count = 0, matching_count = 0;
-  int decode_matches = verify_decode_result(v, permutation, z1,
-                                            &decoded_count, &expected_count,
-                                            &matching_count);
-  int reported_count = ero2(v, permutation);
-  decode_matches = decode_matches && reported_count == decoded_count;
-  printf("Patterson decode verification: %s "
-         "(matched %d/%d error positions; decoded %d, expected %d)\n",
-         decode_matches ? "PASS" : "FAIL",
-         matching_count, expected_count, decoded_count, expected_count);
+v = paloma(v2o(f), v2o(w));
+// v = patterson(w, f);
 
-  if (reported_count < 0 || !decode_matches)
-  {
+int reported = ero2(v, permutation, ya);   // ya に元の並びの誤りを書き込む
+
+int expected = 0, matched = 0, extra = 0;
+for (int i = 0; i < N; i++)
+{
+    int e = (z1[i] != 0);
+    int d = (ya[i] != 0);
+    expected += e;
+    matched  += (e && d);
+    extra    += (!e && d);
+}
+
+
+int ok = (matched == expected && extra == 0 && reported == expected),count=0;
+
+if (ok)
+{
+    printf("PASS\n");
+    for(int i = 0; i < N; i++)
+    {
+        if (z1[i] != 0 && ya[i] != 0){
+            printf("i= %d %d\n", i,count++);
+        }
+    }
+}
+else
+{
+    printf("FAIL matched %d/%d, extra %d, reported %d\n",
+           matched, expected, extra, reported);
     for (int i = 0; i < N; i++)
     {
-      if (z1[i] > 0)
-        printf("i=%d\n", i);
+        if ((ya[i] != 0) != (z1[i] != 0))
+            printf("%s i=%d\n", z1[i] ? "missed" : "extra ", i);
     }
-  }
-
+}
   matrix_free(&inverse_scrambler);
   free(z1);
   free(permutation);
   free(syndrome_matrix);
-  return decode_matches ? EXIT_SUCCESS : EXIT_FAILURE;
+
+
+return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

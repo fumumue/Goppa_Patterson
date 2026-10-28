@@ -1465,279 +1465,159 @@ int isqrt(unsigned short u)
   exit(1);
 }
 
-// 多項式の平方を計算する
-OP osqrt(OP f, OP w)
-{
-  int i, j, k, jj;
-  OP even = {0}, odd = {0}, h = {0}, r = {0}, ww = {0}, s = {0}, tmp = {0};
 
-  j = 0;
-  jj = 0;
-  vec vtmp=o2v(f);
-  k = deg(&vtmp);
+// sqrt(x) mod w を求める (w = g0^2 + x*g1^2 のとき sqrt(x) = g0/g1)
+// 成功で0。鍵ごとに1回だけ呼ぶ。
+int osqrt_x(OP w, OP *sx)
+{
+  OP h = {0}, r = {0}, s = {0}, ww = {0}, tmp = {0}, xx = {0};
+  int i, j = 0, jj = 0;
+  vec vtmp = o2v(w);
+  int k = deg(&vtmp);
+
   for (i = 0; i < k + 1; i++)
   {
-    if (f.t[i].n % 2 == 0 && f.t[i].a > 0)
-    {
-      even.t[j].n = f.t[i].n / 2;
-      even.t[j++].a = gf[isqrt(f.t[i].a)];
-      printf("a=%d %d\n", f.t[i].a, i);
-    }
-    if (f.t[i].n % 2 == 1 && f.t[i].a > 0)
-    {
-      odd.t[jj].n = (f.t[i].n - 1) / 2;
-      odd.t[jj++].a = gf[isqrt(f.t[i].a)];
-      printf(" odd %d\n", i);
-    }
-  }
-  vtmp=o2v(w);
-  k = deg(&vtmp);
-  // printf ("%d\n", k);
-  // exit(1);
-  j = 0;
-  jj = 0;
-  for (i = 0; i < k + 1; i++)
-  {
-    if (w.t[i].n % 2 == 0 && w.t[i].a > 0)
+    if (w.t[i].a == 0) continue;
+    if (w.t[i].n % 2 == 0)
     {
       h.t[j].a = gf[isqrt(w.t[i].a)];
       h.t[j++].n = w.t[i].n / 2;
-      printf("h==%d %d\n", (w.t[i].n / 2), i);
     }
-    if (w.t[i].n % 2 == 1 && w.t[i].a > 0)
+    else
     {
       r.t[jj].a = gf[isqrt(w.t[i].a)];
       r.t[jj++].n = (w.t[i].n - 1) / 2;
-      printf("r=====%d %d\n", (w.t[i].n - 1) / 2, i);
     }
   }
-  printpol(o2v(r));
-  printf(" sqrt(g1)=======\n");
+  if (jj == 0) return 1;            // 奇数次の項がない: g が平方式で square-free でない
 
-  //  exit(1);
   if (LT(r).n > 0)
   {
     s = inv(r, w);
-  }
-  else if (LT(r).n == 0)
-  {
-    printpol(o2v(r));
-    printf(" deg(r)======0!\n");
-    printpol(o2v(w));
-    printf(" goppa======0\n");
-    printpol(o2v(f));
-    printf(" syn======0\n");
-    if (LT(r).a > 0)
-    {
-      s.t[0].a = gf[isqrt(LT(r).a)];
-      s.t[0].n = 0;
-      return omod(oadd(even, omul(coeff(h, s.t[0].a), odd)), w);
-    }
-    return even;
-    // s = inv (r, w);
-    // wait ();
-    // exit (1);
-  }
-  vtmp=o2v(s);
-  if (deg(&vtmp) > 0)
     tmp = omod(omul(s, r), w);
-  if (odeg((tmp)) > 0)
-  {
-    // printpol (o2v (tmp));
-    printf(" r is not inv==========\n");
-    wait();
-    exit(1);
-  }
-  if (LT(h).n > 0 && odeg(s) > 0)
-  {
+    if (odeg(tmp) != 0 || LT(tmp).a != 1) return 2;   // 逆元が取れない
     ww = omod(omul(h, s), w);
-  }
-  if (LT(h).n == 0 || odeg(s) == 0)
-  {
-    printpol(o2v(h));
-    printf(" h=========0\n");
-    exit(1);
-  }
-
-  if (LT(ww).n == 0 && LT(ww).a == 0)
-  {
-    printpol(o2v(s));
-    printf(" s===========\n");
-    printsage(o2v(w));
-    printf(" w==============\n");
-    printpol(o2v(r));
-    printf(" r===========\n");
-    printpol(o2v(h));
-    printf(" h============\n");
-    printpol(o2v(ww));
-    printf(" ww==============\n");
-    printf(" wwが0になりました。error\n");
-    wait();
-    // return ww;;
-    exit(1);
-  }
-
-  tmp = omod(omul(ww, ww), w);
-  if (LT(tmp).n == 1)
-  {
-    printpol(o2v(ww));
-    printf(" ww succsess!===========\n");
   }
   else
   {
-    // printpol (o2v (tmp));
-    printf(" mod w^2==========\n");
-    // printpol (o2v (ww));
-    printf(" ww^2 failed!========\n");
-    printpol(o2v(s));
-    printf(" g1^-1==============\n");
-    // printpol (o2v (w));
-    printf(" w==============\n");
-    // printpol (o2v (h));
-    printf(" g0===========\n");
-    // printpol (o2v (r));
-    printf(" r===========\n");
-    printf("この鍵では逆元が計算できません。error");
-    wait();
-    // return ww;
-    exit(1);
+    // g1 が定数の場合 (元のコードの分岐をそのまま)
+    s.t[0].a = gf[isqrt(LT(r).a)];
+    s.t[0].n = 0;
+    ww = coeff(h, s.t[0].a);
   }
 
-  //    exit(1);
-  printpol(o2v(s));
-  printf(" g1^-1=========\n");
-  printpol(o2v(h));
-  printf(" g0=========\n");
-  // exit(1);
-  printpol(o2v(ww));
-  printf(" ww==========\n");
-  //  exit(1);
-  h = ww;
-  if (odeg(omod(omul(h, ww), w)) == 1)
-  {
-    ww = h;
-    h = omod(oadd(even, omul(ww, odd)), w);
-    return h;
-  }
-  else if (LT(ww).a == 0)
-  {
-    printf("vaka\n");
-    exit(1);
-  }
+  // 検証: ww^2 mod w が x と完全に一致するか
+  xx.t[0].n = 1;
+  xx.t[0].a = 1;
+  tmp = oadd(omod(omul(ww, ww), w), xx);
+  if (LT(tmp).a != 0) return 3;
 
-  // //printpol(o2v(ww));
-  printf(" 来ちゃだめなところに来ました\n");
-
-  exit(1);
+  *sx = ww;
+  return 0;
 }
 
+// f の平方根 mod w。sx は osqrt_x で作ったもの
+OP osqrt_f(OP f, OP w, OP sx)
+{
+  OP even = {0}, odd = {0};
+  int i, j = 0, jj = 0;
+  vec vtmp = o2v(f);
+  int k = deg(&vtmp);
 
+  for (i = 0; i < k + 1; i++)
+  {
+    if (f.t[i].a == 0) continue;
+    if (f.t[i].n % 2 == 0)
+    {
+      even.t[j].n = f.t[i].n / 2;
+      even.t[j++].a = gf[isqrt(f.t[i].a)];
+    }
+    else
+    {
+      odd.t[jj].n = (f.t[i].n - 1) / 2;
+      odd.t[jj++].a = gf[isqrt(f.t[i].a)];
+    }
+  }
+  return omod(oadd(even, omul(sx, odd)), w);
+}
+
+// 既存の呼び出し用 (互換)。復号側は sx を使い回すように直すのが理想
+// 多項式の平方を計算する
+OP osqrt(OP f, OP w)
+{
+  OP sx = {0};
+  if (osqrt_x(w, &sx) != 0) exit(1);
+  return osqrt_f(f, w, sx);
+}
+
+// e: 本当の誤りベクトル、d: 復号結果 (どちらも長さ n, 誤り位置が非0)
+// 戻り値: 本当の誤り T 個のうち、正しく見つかった個数
+// *T_out: 本当の誤りの数, *extra: 誤って余分に出した位置の数
+int count_correct_old(const vec *e, const vec *d, int n, int *T_out, int *extra)
+{
+    int t = 0, hit = 0, ex = 0;
+
+    for (int i = 0; i < n; i++)
+    {
+        int ei = (e->x[i] != 0);
+        int di = (d->x[i] != 0);
+
+        if (ei) t++;
+        if (ei && di) hit++;       // 正しく見つけた
+        if (!ei && di) ex++;       // 誤って余分に出した
+    }
+
+    if (T_out) *T_out = t;
+    if (extra) *extra = ex;
+    return hit;
+}
 
 vec paloma(OP s, OP f)
 {
-    vec x = {0};
-    vec v = {0};
-    OP ss = {0};
-    OP null = {0};
+    vec x = {0}, v = {0}, zero = {0};
+    x.x[1] = 1;  v.x[0] = 1;
+    OP one = v2o(v);
 
-    OP g1, g2, g12;
-    OP s1, s2;
-    OP u, sp;
+    if (odeg(s) < 0) return zero;          // 誤りなし
 
-    OP a0, a1, b0, b1;
-    OP q, r, b2;
+    OP ss = omod(oadd(one, omul(s, v2o(x))), f);
 
-    x.x[1] = 1;   /* x */
-    v.x[0] = 1;   /* 1 */
+    OP g1 = gcd(s, f);
+    OP g2 = gcd(ss, f);
+    OP g12 = odiv(f, omul(g1, g2));
 
-    /* ss = 1 + s*x mod f */
-    ss = omod(oadd(v2o(v), omul(s, v2o(x))), f);
+    OP s1 = odiv(s, g1);                   // 常に割る
+    OP s2 = odiv(ss, g2);
 
-    /* gcd 分解 */
-    g1 = gcd(s, f);
-    g2 = gcd(ss, f);
-
-    /* g12 = f / (g1*g2) */
-    OP g1g2 = omul(g1, g2);
-    g12 = odiv(f, g1g2);
-
-    if (odeg(g12) < K - 1) {
-        printf("deg(g12) too small\n");
-        exit(1);
-    }
-
-    /* 正規化 */
-    s1 = (odeg(g1) > 0) ? odiv(s, g1) : s;
-    s2 = (odeg(g2) > 0) ? odiv(ss, g2) : ss;
-
-    /* u = g1*s2 * inv(g2*s1) mod g12 */
     OP denom = omul(g2, s1);
-    if (odeg(gcd(denom, g12)) > 0) {
+    if (odeg(gcd(denom, g12)) > 0) {       // f が square-free なら起きないはず
         printf("denominator not invertible mod g12\n");
         exit(1);
     }
 
-    u = omod(
-            omul(
-                omul(g1, s2),
-                inv(denom, g12)
-            ),
-            g12
-        );
+    OP u  = omod(omul(omul(g1, s2), inv(denom, g12)), g12);
+    OP sp = osqrt(u, g12);
 
-    /* 平方根（存在は理論保証） */
-    sp = osqrt(u, g12);
+    /* 拡張ユークリッド: rb ≡ tb*sp (mod g12) を保つ */
+    OP ra = g12, rb = sp;
+    OP ta = {0}, tb = one;
+    int Ba = K / 2 - odeg(g2);             // a' の次数の上限
 
-    /* 拡張ユークリッド */
-    a0 = sp;
-    a1 = g12;
-    b0 = v2o(v);   /* 1 */
-    b1 = null;     /* 0 */
-
-    while (1) {
-        q = odiv(a0, a1);
-        r = omod(a0, a1);
-
-        a0 = a1;
-        a1 = r;
-
-        b2 = omod(oadd(b0, omul(q, b1)), g12);
-        b0 = b1;
-        b1 = b2;
-
-        /* 病的ケース対応 */
-        if (odeg(a0) == K/2 - odeg(g1) &&
-            odeg(b0) <= (K-1)/2 - odeg(g2))
-            break;
-
-        if (odeg(a1) < 0) {
-            printf("Euclid failed\n");
-            exit(1);
-        }
+    while (odeg(rb) > Ba) {                // 判定が先
+        OP q = odiv(ra, rb);
+        OP r = omod(ra, rb);
+        OP t = oadd(ta, omul(q, tb));
+        ra = rb;  rb = r;
+        ta = tb;  tb = t;
     }
+    OP a0 = rb, b0 = tb;
 
-    /* σ = a^2 + x b^2 */
     OP a = omul(a0, g2);
     OP b = omul(b0, g1);
+    OP sigma = oadd(omul(a, a), omul(omul(b, b), v2o(x)));
 
-    OP sigma = oadd(
-        omul(a, a),
-        omul(omul(b, b), v2o(x))
-    );
-
-    if (odeg(sigma) != K) {
-        printf("warning: deg(sigma) != K\n");
-    }
-
-    /* デバッグ用（病的ケースチェック） */
-    /*
-    oprintpol(g1); printf(" = g1\n");
-    oprintpol(g2); printf(" = g2\n");
-    oprintpol(g12); printf(" = g12\n");
-    oprintpol(a); printf(" = a\n");
-    oprintpol(b); printf(" = b\n");
-    oprintpol(sigma); printf(" = sigma\n");
-    */
+    int yt = odeg(sigma);                   // 誤りの個数 (K に固定しない)
+    if (yt < 1 || yt > K) { printf("decode failed\n"); exit(1); }
 
     return chen(o2v(sigma));
 }
@@ -2467,10 +2347,10 @@ static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
   return Setvec(uk, K);
 }
 
-int ero2(vec v, const unsigned short permutation[N])
+int ero2(vec v, const unsigned short permutation[N],unsigned short *ya)
 {
   int i, count = 0;
-  unsigned short ya[N] = {0}, xa[N] = {0};
+  unsigned short xa[N] = {0};
 
   for (i = 0; i < T * 2; i++)
   {
@@ -2549,30 +2429,6 @@ int ero2(vec v, const unsigned short permutation[N])
   if (count == T * 2)
   {
     printf("err=%dっ!! \n", count);
-  }
-  if (count < T * 2)
-  {
-    printf("error is too few\n");
-
-    // memcpy (zz, z1, sizeof (zz));
-    /*
-      printf("{");
-      for (i = 0; i < D; i++)
-        printf("%d,", z1[i]);
-      printf("};\n");
-      printpol(o2v(w));
-      printf(" =========goppa\n");
-      printsage(o2v(w));
-      printf(" =========sage\n");
-      printsage(o2v(f));
-      printf(" =========syn\n");
-      printpol(o2v(f));
-      printf(" ==========synd\n");
-      */
-    printf("へげえええーっ\n");
-    // exit(1);
-    return -1;
-    //exit(1);
   }
 
   return count;
