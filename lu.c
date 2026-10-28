@@ -56,8 +56,189 @@ int matrix_copy(MTX *destination, const MTX *source)
 }
 
 
+#ifndef INV_WB
+#define INV_WB 4   /* 後退代入の語ブロック幅。4と8を比べてください */
+#endif
+
+/* シードから64ビットずつ乱数を作る(速度検証用。暗号用ではありません) */
+static inline uint64_t splitmix64(uint64_t *s)
+{
+  uint64_t z = (*s += UINT64_C(0x9E3779B97F4A7C15));
+  z = (z ^ (z >> 30)) * UINT64_C(0xBF58476D1CE4E5B9);
+  z = (z ^ (z >> 27)) * UINT64_C(0x94D049BB133111EB);
+  return z ^ (z >> 31);
+}
+
 // S と S^{-1} を同時に作る。従属な行はその行だけ作り直す。
 int random_full_rank_binary_matrix_inv(MTX *S, MTX *Sinv, RNG *rng)
+{
+  if (S == NULL || Sinv == NULL || rng == NULL ||
+      S->x == NULL || Sinv->x == NULL ||
+      S->storage == NULL || Sinv->storage == NULL ||
+      S->rows == 0 || S->rows != S->cols ||
+      Sinv->rows != S->rows || Sinv->cols != S->cols)
+  {
+    fprintf(stderr, "invalid matrix arguments for scrambler generation\n");
+    return -1;
+  }
+
+  const size_t n = S->rows;
+  const size_t words = (n + 63) / 64;
+  if (n > SIZE_MAX / words || n * words > SIZE_MAX / sizeof(uint64_t))
+    return -1;
+  const uint64_t lastmask = (n % 64) ? ((UINT64_C(1) << (n % 64)) - 1)
+                                     : ~UINT64_C(0);
+
+  uint64_t *basis = calloc(n * words, sizeof *basis); // basis[p]: 最下位ビットが p の行
+  uint64_t *track = calloc(n * words, sizeof *track); // basis[p] = track[p] に立つ S の行の和
+  uint64_t *inv   = calloc(n * words, sizeof *inv);   // S^{-1} (ビットパック)
+  uint64_t *spack = calloc(n * words, sizeof *spack); // 採用した S の行(ビットパック)
+  uint64_t *umask = calloc(words, sizeof *umask);     // ピボットとして使用済みのビット
+  uint64_t *cand  = malloc(words * sizeof *cand);
+  uint64_t *red   = malloc(words * sizeof *red);
+  uint64_t *trk   = malloc(words * sizeof *trk);
+  int rc = -1;
+
+  /* 元のコードと同じ「最下位ビット」から64ビットのシードを作る */
+  uint64_t sm = 0;
+  for (int i = 0; i < 64; i++)
+    sm = (sm << 1) | (uint64_t)(xor128(rng) & 1UL);
+
+  if (!basis || !track || !inv || !spack || !umask || !cand || !red || !trk)
+  {
+    fprintf(stderr, "failed to allocate scrambler generation workspace\n");
+    goto done;
+  }
+
+  for (size_t row = 0; row < n; row++)
+  {
+    const size_t trk_words = row / 64 + 1;   // 追跡ベクトルは 0..row のビットだけ使う
+    bool accepted = false;
+
+    for (int attempt = 0; attempt < 4096 && !accepted; attempt++)
+    {
+#ifdef SCR_RNG_ORIG
+      /* 切り分け用: 元のコードと同じ 1 ビットずつの生成 */
+      memset(cand, 0, words * sizeof *cand);
+      for (size_t col = 0; col < n; col++)
+        cand[col / 64] |= (uint64_t)(xor128(rng) & 1UL) << (col % 64);
+#else
+      for (size_t w = 0; w < words; w++)
+        cand[w] = splitmix64(&sm);
+      cand[words - 1] &= lastmask;
+#endif
+
+      memcpy(red, cand, words * sizeof *red);
+      memset(trk, 0, trk_words * sizeof *trk);
+      trk[row / 64] |= UINT64_C(1) << (row % 64);
+
+      // 立っているピボットビットを下位から消す(basis[p] は p より下が0)
+      for (size_t w = 0; w < words; w++)
+      {
+        uint64_t bits;
+        while ((bits = red[w] & umask[w]) != 0)
+        {
+          const size_t p = w * 64 + (size_t)__builtin_ctzll(bits);
+          const uint64_t *b = basis + p * words;
+          const uint64_t *t = track + p * words;
+          for (size_t x = w; x < words; x++)
+            red[x] ^= b[x];
+          for (size_t x = 0; x < trk_words; x++)
+            trk[x] ^= t[x];
+        }
+      }
+
+      size_t q = n;
+      for (size_t w = 0; w < words; w++)
+        if (red[w] != 0)
+        {
+          q = w * 64 + (size_t)__builtin_ctzll(red[w]);
+          break;
+        }
+      if (q == n)
+        continue;                             // 従属: この行だけ作り直す
+
+      memcpy(basis + q * words, red, words * sizeof *red);
+      memcpy(track + q * words, trk, trk_words * sizeof *trk);
+      umask[q / 64] |= UINT64_C(1) << (q % 64);
+      memcpy(spack + row * words, cand, words * sizeof *cand);
+      accepted = true;
+    }
+
+    if (!accepted)
+    {
+      fprintf(stderr, "scrambler: no independent row at row %zu of %zu\n", row, n);
+      goto done;
+    }
+  }
+
+  // B = T·S  (B は対角が1の上三角)。S^{-1} = B^{-1}·T を後退代入で求める。
+  //   inv[p] = track[p] ^ XOR_{q>p, B[p][q]=1} inv[q]
+  // 語ごとに独立なので、語のブロック単位で並列化する。
+  {
+    const size_t WB = INV_WB;
+    const size_t nblk = (words + WB - 1) / WB;
+
+#pragma omp parallel for schedule(static)
+    for (size_t blk = 0; blk < nblk; blk++)
+    {
+      const size_t w0 = blk * WB;
+      const size_t w1 = (w0 + WB < words) ? w0 + WB : words;
+
+      for (size_t p = n; p-- > 0;)
+      {
+        uint64_t *xp = inv + p * words;
+        const uint64_t *bp = basis + p * words;
+        for (size_t w = w0; w < w1; w++)
+          xp[w] = track[p * words + w];
+
+        for (size_t wi = p / 64; wi < words; wi++)
+        {
+          uint64_t bits = bp[wi];
+          if (wi == p / 64)
+            bits &= ~((UINT64_C(2) << (p % 64)) - 1);   // q > p だけ残す
+          while (bits)
+          {
+            size_t q = wi * 64 + (size_t)__builtin_ctzll(bits);
+            bits &= bits - 1;
+            const uint64_t *xq = inv + q * words;
+            for (size_t w = w0; w < w1; w++)
+              xp[w] ^= xq[w];
+          }
+        }
+      }
+    }
+  }
+
+  // S と S^{-1} を 1 バイト形式へ展開(行ごとに独立なので並列)
+#pragma omp parallel for schedule(static)
+  for (size_t r = 0; r < n; r++)
+  {
+    const uint64_t *sp = spack + r * words;
+    const uint64_t *ip = inv + r * words;
+    for (size_t w = 0; w < words; w++)
+    {
+      const size_t c0 = w * 64;
+      const size_t cn = (n - c0 < 64) ? (n - c0) : 64;
+      const uint64_t sv = sp[w], iv = ip[w];
+      for (size_t b = 0; b < cn; b++)
+      {
+        S->x[r][c0 + b]    = (sv >> b) & 1;
+        Sinv->x[r][c0 + b] = (iv >> b) & 1;
+      }
+    }
+  }
+  rc = 0;
+
+done:
+  if (rc != 0 && S != NULL && S->storage != NULL)
+    memset(S->storage, 0, S->rows * S->cols * sizeof(*S->storage));
+  free(basis); free(track); free(inv); free(spack); free(umask);
+  free(cand);  free(red);   free(trk);
+  return rc;
+}
+// S と S^{-1} を同時に作る。従属な行はその行だけ作り直す。
+int random_full_rank_binary_matrix_inv2(MTX *S, MTX *Sinv, RNG *rng)
 { 
   if (S == NULL || Sinv == NULL || rng == NULL ||
       S->x == NULL || Sinv->x == NULL ||

@@ -18,7 +18,23 @@
 #define SIZE_OF_ARRAY(array) (sizeof(array) / sizeof((array)[0]))
 
 unsigned long xor128(RNG *state);
-int mlt(int x, int y);
+
+/* common.h */
+static inline int mlt(int x, int y)
+{
+  int s = x + y - 2;
+  s -= (s >= M - 1) ? M - 1 : 0;
+  return (x && y) ? s + 1 : 0;
+}
+
+static inline int mltn(int n, int x)
+{
+  if (n <= 0) return 1;   /* 元のコードは n<=0 のとき 1 を返す */
+  if (x == 0) return 0;   /* 0 の正のべき乗は 0 */
+  return (int)(((unsigned long long)n * (unsigned)(x - 1)) % (M - 1)) + 1;
+}
+
+
 int mltn(int n, int x);
 void gen_gf(int deg, int order, int opt_sage);
 void random_shuffle(unsigned short *array, size_t size);

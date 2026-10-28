@@ -372,7 +372,7 @@ unsigned long xor128(RNG *state)
   return (state->w = (state->w ^ (state->w >> 19)) ^ (t ^ (t >> 8)));
 }
 
-int mlt(int x, int y)
+int agaaa(int x, int y)
 {
 
   if (x == 0 || y == 0)
@@ -381,20 +381,8 @@ int mlt(int x, int y)
   return ((x + y - 2) % (M - 1)) + 1;
 }
 
-int mlt2(int n, int x)
-{
-  int i, j;
 
-  if (n == 0)
-    return 1;
-  i = x;
-  for (j = 0; j < n - 1; j++)
-    i = mlt(i, x);
-
-  return i;
-}
-
-int mltn(int n, int x) {
+int mltngare(int n, int x) {
     int ret = 1;
     while (n > 0) {
         if (n & 1) ret = mlt(ret , x) ;  // n の最下位bitが 1 ならば x^(2^i) をかける

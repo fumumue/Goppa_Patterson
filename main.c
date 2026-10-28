@@ -1,4 +1,6 @@
 #include "common.h"
+#include <sys/random.h>
+
 
 unsigned short oinv(unsigned short a);
 unsigned short oinv2(unsigned short a);
@@ -54,6 +56,7 @@ int main(void)
   vec f = {0}, w = {0}, v = {0};
 
   srand(clock());
+  
   if (z1 == NULL || permutation == NULL || syndrome_matrix == NULL)
   {
     fprintf(stderr, "main: failed to allocate input/output buffers\n");
@@ -90,8 +93,8 @@ int main(void)
   printf(" ==syndrome\n");
 
 
-  //v=paloma(v2o(f),v2o(w));
-  v = patterson(w, f);
+  v=paloma(v2o(f),v2o(w));
+  //v = patterson(w, f);
 
   int decoded_count = 0, expected_count = 0, matching_count = 0;
   int decode_matches = verify_decode_result(v, permutation, z1,

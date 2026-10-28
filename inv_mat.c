@@ -290,6 +290,9 @@ static int mulmat_gf2a(const MTX *A, const MTX *B,
     return bad ? -1 : 0;
 }
 
+
+
+
 int pubkey_pack(const MTX *scrambler,
                 unsigned short field_matrix[N][K],
                 const unsigned short permutation[N],

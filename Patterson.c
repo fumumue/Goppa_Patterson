@@ -8,8 +8,6 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #define REG 64
-extern int mlt(int x, int y);
-extern int mltn(int n, int a);
 extern void makeS();
 
 #include <time.h>
@@ -2244,310 +2242,38 @@ int mkg(unsigned short matrix[N][K], vec *result)
   unsigned short *ta = calloc(N, sizeof(*ta));
   if (!tr || !ta) { free(tr); free(ta); return -1; }
 
-  bool found = false;
-  for (int attempt = 0; attempt < 10000 && !found; attempt++)
-  {
-    memset(pp.x, 0, sizeof(pp.x));
-    for (int i = 0; i < K; i++) pp.x[i] = rand() % N;
-    pp.x[K] = 1;
-    w = setpol(pp.x, K + 1);
-    polynomial = o2v(w);
+bool found = false;
+for (int attempt = 0; attempt < 100 && !found; attempt++)
+{
+  memset(pp.x, 0, sizeof(pp.x));
+  for (int i = 0; i < K; i++) pp.x[i] = rand() % N;
+  pp.x[K] = 1;
+  w = setpol(pp.x, K + 1);
+  polynomial = o2v(w);
 
-    bool no_root = true;
-#pragma omp parallel for schedule(static) reduction(&&:no_root)
-    for (int i = 0; i < N; i++)
+  int has_root = 0;   /* 試行ごとに0に戻す */
+#pragma omp parallel for schedule(static)
+  for (int i = 0; i < N; i++)
+  {
+    int skip;
+#pragma omp atomic read
+    skip = has_root;
+    if (skip) continue;
+    ta[i] = i ? eval(polynomial.x, fg[i]) : polynomial.x[0];
+    if (ta[i] == 0)
     {
-      ta[i] = i ? eval(polynomial.x, fg[i]) : polynomial.x[0];
-      if (ta[i] == 0) no_root = false;
+#pragma omp atomic write
+      has_root = 1;
     }
-    found = no_root;
   }
+  found = !has_root;
+}
   if (!found) { free(tr); free(ta); return -1; }
 
   for (int i = 0; i < N; i++) tr[i] = oinv(ta[i]);
   matrix_horner(&pp, tr, matrix);
   *result = o2v(w);
   free(tr); free(ta);
-  return 0;
-}
-
-
-int mkg0(unsigned short matrix[N][K], vec *result)
-{
-  OP w = {0};
-  vec pp = {0}, tt = {0}, polynomial = {0};
-  unsigned short *tr = calloc(N, sizeof(*tr));
-  unsigned short *ta = calloc(N, sizeof(*ta));
-  unsigned short (*lma)[K] = calloc(N, sizeof(*lma)); // lma[j][k] = fg[ma[j][k]]
-  unsigned short (*lpt)[K] = calloc(K, sizeof(*lpt)); // lpt[i][k] = fg[polynomial_table[k][i]]
-  unsigned short (*powers)[N] = calloc(K * 2, sizeof(*powers));
-  unsigned short (*polynomial_table)[K * 2] =
-      calloc(K * 2, sizeof(*polynomial_table));
-
-  if (tr == NULL || ta == NULL || lma == NULL || lpt == NULL ||
-      powers == NULL || polynomial_table == NULL)
-  {
-    fprintf(stderr, "mkg: failed to allocate key-generation workspace\n");
-    free(tr);
-    free(ta);
-    free(lma);
-    free(lpt);
-    free(powers);
-    free(polynomial_table);
-    return -1;
-  }
-
-  // 既約性判定のためのBen-Orアルゴリズム。既約多項式しか使わない。
-  const int max_polynomial_attempts = 10000;
-  bool found_valid_polynomial = false;
-
-  double t0 = now();   // ★計測用
-  int tries = 0;       // ★計測用
-
-  // 探索は逐次。見つかった時点で止める（共有変数の競合を避ける）
-  for (int attempt = 0;
-       attempt < max_polynomial_attempts && !found_valid_polynomial;
-       attempt++)
-  {
-    tries++;           // ★計測用
-
-    memset(pp.x, 0, sizeof(pp.x));
-    memset(tt.x, 0, sizeof(tt.x));
-
-    for (int i = 0; i < K; i++)
-      pp.x[i] = rand() % N;   // 暗号用途なので getrandom() 等への置き換え推奨
-    pp.x[K] = 1;
-
-    //mykey(tt.x, pp);
-    //tt.x[K] = 1;
-    //if (ben_or(v2o(tt)) < 0)
-    //  continue;
-
-    w = setpol(pp.x, K + 1);
-    polynomial = o2v(w);
-
-    // 各点の評価は独立なので、ここは並列化してよい
-    bool no_root = true;
-#pragma omp parallel for schedule(static) reduction(&&:no_root)
-    for (int i = 0; i < N; i++)
-    {
-      ta[i] = trace(polynomial, i);
-      if (ta[i] == 0)
-        no_root = false;
-    }
-    found_valid_polynomial = no_root;
-  }
-
-  if (!found_valid_polynomial)
-  {
-    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n", max_polynomial_attempts);
-    free(tr);
-    free(ta);
-    free(lma);
-    free(lpt);
-    free(powers);
-    free(polynomial_table);
-    return -1;
-  }
-
-  printf("mkg-detail search: %.3f s (%d tries)\n", now() - t0, tries);   // ★計測用
-
-  for (int i = 0; i < N; i++)
-    tr[i] = oinv(ta[i]);
-
-  printpol(o2v(w));
-  printf(" =irreducible\n");
-  printsage(o2v(w));
-  printf("\n");
-
-  van(powers);
-  ogt(pp.x, polynomial_table);
-
-  t0 = now();          // ★計測用(表示にかかった時間を除くため、ここで取り直す)
-  matrix_horner(&pp, tr, matrix);   // ← これだけ  
-
-
-  // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
-#pragma omp parallel for schedule(static)
-  for (int j = 0; j < N; j++)
-  {
-    for (int i = 0; i < K; i++)
-    {
-      unsigned short v = gf[mlt(fg[powers[i][j]], tr[j])];
-      lma[j][i] = fg[v];
-    }
-  }
-
-  // 転置しながら対数表現にして、内側ループを連続アクセスにする
-  for (int i = 0; i < K; i++)
-    for (int k = 0; k < K; k++)
-      lpt[i][k] = fg[polynomial_table[k][i]];
-
-  printf("mkg-detail lma+lpt: %.3f s\n", now() - t0); t0 = now();         // ★計測用
-
-  // matrix[j][i] = Σ_k polynomial_table[k][i] * ma[j][k]
-  // j ごとに別の行 matrix[j][*] にだけ書くので競合しない
-#pragma omp parallel for schedule(static)
-  for (int j = 0; j < N; j++)
-  {
-    for (int i = 0; i < K; i++)
-    {
-      unsigned short s = 0;
-      for (int k = 0; k < K; k++)
-        s ^= gf[mlt(lpt[i][k], lma[j][k])];
-      matrix[j][i] = s;
-    }
-  }
-
-  printf("mkg-detail matrix: %.3f s\n", now() - t0);                      // ★計測用
-  {
-    unsigned short (*chk)[K] = calloc(N, sizeof(*chk));
-    if (chk)
-    {
-      double th = now();
-      matrix_horner(&polynomial, tr, chk);
-      printf("mkg-detail horner: %.3f s\n", now() - th);
-      printf("mkg-detail horner check: %s\n",
-             memcmp(chk, matrix, (size_t)N * sizeof(*chk)) == 0 ? "OK" : "MISMATCH");
-      free(chk);
-    }
-  }
-    
-  *result = o2v(w);
-/*
-  free(tr);
-  free(ta);
-  free(lma);
-  free(lpt);
-  free(powers);
-  free(polynomial_table);
-  */
-
-  return 0;
-}
-
-int mkg_ma(unsigned short matrix[N][K], vec *result)
-{
-  OP w = {0};
-  vec pp = {0}, tt = {0}, polynomial = {0};
-  unsigned short *tr = calloc(N, sizeof(*tr));
-  unsigned short *ta = calloc(N, sizeof(*ta));
-  unsigned short (*lma)[K] = calloc(N, sizeof(*lma)); // lma[j][k] = fg[ma[j][k]]
-  unsigned short (*lpt)[K] = calloc(K, sizeof(*lpt)); // lpt[i][k] = fg[polynomial_table[k][i]]
-  unsigned short (*powers)[N] = calloc(K * 2, sizeof(*powers));
-  unsigned short (*polynomial_table)[K * 2] =
-      calloc(K * 2, sizeof(*polynomial_table));
-
-  if (tr == NULL || ta == NULL || lma == NULL || lpt == NULL ||
-      powers == NULL || polynomial_table == NULL)
-  {
-    fprintf(stderr, "mkg: failed to allocate key-generation workspace\n");
-    free(tr);
-    free(ta);
-    free(lma);
-    free(lpt);
-    free(powers);
-    free(polynomial_table);
-    return -1;
-  }
-
-  // 既約性判定のためのBen-Orアルゴリズム。既約多項式しか使わない。
-  const int max_polynomial_attempts = 10000;
-  bool found_valid_polynomial = false;
-
-  // 探索は逐次。見つかった時点で止める（共有変数の競合を避ける）
-  for (int attempt = 0;
-       attempt < max_polynomial_attempts && !found_valid_polynomial;
-       attempt++)
-  {
-    memset(pp.x, 0, sizeof(pp.x));
-    memset(tt.x, 0, sizeof(tt.x));
-
-    for (int i = 0; i < K; i++)
-      pp.x[i] = rand() % N;   // 暗号用途なので getrandom() 等への置き換え推奨
-    pp.x[K] = 1;
-
-    //mykey(tt.x, pp);
-    //tt.x[K] = 1;
-    //if (ben_or(v2o(tt)) < 0)
-    //  continue;
-
-    w = setpol(pp.x, K + 1);
-    polynomial = o2v(w);
-
-    // 各点の評価は独立なので、ここは並列化してよい
-    bool no_root = true;
-#pragma omp parallel for schedule(static) reduction(&&:no_root)
-    for (int i = 0; i < N; i++)
-    {
-      ta[i] = trace(polynomial, i);
-      if (ta[i] == 0)
-        no_root = false;
-    }
-    found_valid_polynomial = no_root;
-  }
-
-  if (!found_valid_polynomial)
-  {
-    fprintf(stderr, "failed to find a valid Goppa polynomial after %d attempts\n",
-            max_polynomial_attempts);
-    free(tr);
-    free(ta);
-    free(lma);
-    free(lpt);
-    free(powers);
-    free(polynomial_table);
-    return -1;
-  }
-
-  for (int i = 0; i < N; i++)
-    tr[i] = oinv(ta[i]);
-
-  printpol(o2v(w));
-  printf(" =irreducible\n");
-  printsage(o2v(w));
-  printf("\n");
-
-  van(powers);
-  ogt(tt.x, polynomial_table);
-
-  // lma[j][i] = fg[ gf[ powers[i][j] * tr[j] ] ]  （対数表現で保持）
-#pragma omp parallel for schedule(static)
-  for (int j = 0; j < N; j++)
-  {
-    for (int i = 0; i < K; i++)
-    {
-      unsigned short v = gf[mlt(fg[powers[i][j]], tr[j])];
-      lma[j][i] = fg[v];
-    }
-  }
-
-  // 転置しながら対数表現にして、内側ループを連続アクセスにする
-  for (int i = 0; i < K; i++)
-    for (int k = 0; k < K; k++)
-      lpt[i][k] = fg[polynomial_table[k][i]];
-
-  // matrix[j][i] = Σ_k polynomial_table[k][i] * ma[j][k]
-  // j ごとに別の行 matrix[j][*] にだけ書くので競合しない
-#pragma omp parallel for schedule(static)
-  for (int j = 0; j < N; j++)
-  {
-    for (int i = 0; i < K; i++)
-    {
-      unsigned short s = 0;
-      for (int k = 0; k < K; k++)
-        s ^= gf[mlt(lpt[i][k], lma[j][k])];
-      matrix[j][i] = s;
-    }
-  }
-
-  *result = o2v(w);
-  free(tr);
-  free(ta);
-  free(lma);
-  free(lpt);
-  free(powers);
-  free(polynomial_table);
   return 0;
 }
 
