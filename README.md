@@ -64,8 +64,7 @@ $\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
 - 二元の場合、形式微分 $\sigma'(x)$ は $\sigma$ を偶数部と奇数部に分けて
   $$\sigma(x) = a(x)^2 + x\, b(x)^2,\quad \sigma'(x) = b(x)^2$$
   と書けます($\deg a \le \lfloor t/2 \rfloor$、$\deg b \le \lfloor (t-1)/2 \rfloor$)。
-- 鍵方程式:
-  $$S(x)\,\sigma(x) \equiv \sigma'(x) \pmod{g(x)}$$
+- 鍵方程式:$$S(x)\,\sigma(x) \equiv \sigma'(x) \pmod{g(x)}$$
 
 #### 手順
 
@@ -75,9 +74,8 @@ $\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
 4. **平方根**: $R(x) = \sqrt{T(x) + x} \bmod g(x)$ を求める。
    - $T + x = T_0(x)^2 + x\,T_1(x)^2$ と偶奇分解し、事前計算した $\sqrt{x} \bmod g$ を用いて $R = T_0 + \sqrt{x}\,T_1$ とする。
 5. **拡張ユークリッド互除法**: $a(x) \equiv b(x)\,R(x) \pmod{g(x)}$ を満たす $a, b$ を、次数条件
-
-   $\deg a \le \lfloor t/2 \rfloor$、$\deg b \le \lfloor (t-1)/2 \rfloor$
-   
+   $\deg a \le \lfloor t/2 \rfloor$、
+   $\deg b \le \lfloor (t-1)/2 \rfloor$
    を満たした時点で打ち切って求め、
 
    $$\sigma(x) = a(x)^2 + x\,b(x)^2$$
