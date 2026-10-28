@@ -116,7 +116,7 @@ $\mathbb{F}_{2^m}[x]/(g)$
 - N. J. Patterson, "The algebraic decoding of Goppa codes," *IEEE Trans. Inf. Theory*, 21(2), 1975.
 - V. D. Goppa, "A new class of linear error-correcting codes," *Probl. Inf. Transm.*, 6(3), 1970.
 - R. J. McEliece, "A public-key cryptosystem based on algebraic coding theory," *DSN Progress Report*, 1978.
-- 
+  
 ## ビルド
 
 `make` は各ソースを個別にコンパイルし、`build/patterson` にリンクします。
