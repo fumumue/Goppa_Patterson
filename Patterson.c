@@ -171,7 +171,7 @@ int vdeg(vec a)
   int i, n = 0, flg = 0;
 
   // #pragma omp parallel for
-  for (i = 0; i < DEG; i++)
+  for (i = DEG-1; i >=0; i--)
   {
     if (a.x[i] > 0)
     {
@@ -195,7 +195,7 @@ int odeg(OP f)
     return 0;
 
   // k=terms(f);
-  for (i = 0; i < DEG; i++)
+  for (i = DEG-1; i >= 0; i--)
   {
     if (j < f.t[i].n && f.t[i].a > 0)
       j = f.t[i].n;
