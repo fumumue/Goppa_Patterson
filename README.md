@@ -16,8 +16,7 @@ Goppa符号は有限体上の代数的な誤り訂正符号で、McEliece暗号�
 $$\Gamma(L, g) = \{ c \in \mathbb{F}_2^n \mid \sum_{i=1}^{n} \frac{c_i}{x - \alpha_i} \equiv 0 \pmod{g(x)} \}$$
 
 - $m, t$ を正整数とし、を各成分 $\mathbb{F}_2$ 上の $m$ 次元ベクトルに展開すると、
-- $mt \times n$
-  の二元検査行列が得られます。
+  $mt \times n$の二元検査行列が得られます。
 -  上の次数 $t$ の既約多項式 $g(x)$ を選びます(Goppa多項式)。
 - $L = (\alpha_1, \dots, \alpha_n)$ を $\mathbb{F}_{2^m}$ の相異なる元の列とします($n \le 2^m$、すべての $i$ で $g(\alpha_i) \neq 0$)。
 
