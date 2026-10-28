@@ -51,7 +51,8 @@ $mt \times n$
 
 ### Patterson アルゴリズム
 
-二元Goppa符号に対する効率的な復号アルゴリズムです(Patterson, 1975)。受信語 $r = c + e$($c \in \Gamma(L,g)$、$\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
+二元Goppa符号に対する効率的な復号アルゴリズムです(Patterson, 1975)。受信語 $r = c + e$($c \in \Gamma(L,g)$、
+$\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
 
 #### 準備
 
