@@ -32,7 +32,7 @@ $$
 
 #### 検査行列
 
-$\mathbb{F}_{2^m}$ 上の $t \times n$ 行列
+$\mathbb{F}_{2^m}$ 上の $'t \times n'$ 行列
 
 $$
 H = \begin{pmatrix}
