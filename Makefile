@@ -10,7 +10,7 @@ DEPFLAGS := -MMD -MP -DNDEBUG
 LDFLAGS ?= -flto
 LDLIBS ?=
 
-SOURCES := main.c Patterson.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c
+SOURCES := main.c Patterson.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c systematic.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 TEST_OBJECTS := $(filter-out $(BUILD_DIR)/main.o,$(OBJECTS))
 

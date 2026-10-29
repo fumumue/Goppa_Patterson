@@ -1,17 +1,25 @@
 // Niederreiter cryptosystem with Patterson decoding.
 
 #include "common.h"
+#include "systematic.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+
+
 #define REG 64
 extern void makeS();
 
 #include <time.h>
-static double now(void){ struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return t.tv_sec + t.tv_nsec*1e-9; }
+static double now(void)
+{
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return t.tv_sec + t.tv_nsec * 1e-9;
+}
 
 // 有限体の元の逆数
 unsigned short
@@ -20,7 +28,7 @@ oinv(unsigned short a)
   if (a == 0)
     return -1;
 
-  return (N - fg[a]) % (N-1) + 1;
+  return (N - fg[a]) % (N - 1) + 1;
 
   printf("no return \n");
 
@@ -43,7 +51,7 @@ oinv2(unsigned short a)
   }
 
   printf("no return \n");
-  exit (1);
+  exit(1);
 }
 
 // aに何をかけたらbになるか
@@ -154,16 +162,14 @@ int terms(OP f)
   return count;
 }
 
-
 // 零多項式なら -1、それ以外は最高次の添字
 static inline int deg(const vec *a)
 {
-    for (int i = DEG - 1; i >= 0; i--)
-        if (a->x[i] != 0)
-            return i;
-    return -1;
+  for (int i = DEG - 1; i >= 0; i--)
+    if (a->x[i] != 0)
+      return i;
+  return -1;
 }
-
 
 // 多項式の次数(default)
 int vdeg(vec a)
@@ -171,7 +177,7 @@ int vdeg(vec a)
   int i, n = 0, flg = 0;
 
   // #pragma omp parallel for
-  for (i = DEG-1; i >=0; i--)
+  for (i = DEG - 1; i >= 0; i--)
   {
     if (a.x[i] > 0)
     {
@@ -185,7 +191,6 @@ int vdeg(vec a)
   return n;
 }
 
-
 // 多項式の次数(degのOP型)
 int odeg(OP f)
 {
@@ -195,7 +200,7 @@ int odeg(OP f)
     return 0;
 
   // k=terms(f);
-  for (i = DEG-1; i >= 0; i--)
+  for (i = DEG - 1; i >= 0; i--)
   {
     if (j < f.t[i].n && f.t[i].a > 0)
       j = f.t[i].n;
@@ -203,7 +208,6 @@ int odeg(OP f)
 
   return j;
 }
-
 
 // 多項式を表示する（OP型）
 void oprintpol(OP f)
@@ -692,8 +696,6 @@ OP odiv(OP f, OP g)
   return ret;
 }
 
-
-
 // 多項式のべき乗
 OP opow(OP f, int n)
 {
@@ -941,150 +943,147 @@ void printsage(vec a)
   }
 }
 
-
 // vec 多項式の剰余
 vec vmod2(vec f, vec g)
 {
-    vec r = f;
-    int dg = deg(&g);
+  vec r = f;
+  int dg = deg(&g);
 
-    // ゼロ多項式で割ることはできない
-    bool gzero = true;
+  // ゼロ多項式で割ることはできない
+  bool gzero = true;
+  for (int i = 0; i < DEG; i++)
+    if (g.x[i] != 0)
+      gzero = false;
+
+  if (gzero)
+    exit(1);
+
+  while (true)
+  {
+    int dr = deg(&r);
+
+    bool rzero = true;
     for (int i = 0; i < DEG; i++)
-        if (g.x[i] != 0)
-            gzero = false;
+      if (r.x[i] != 0)
+        rzero = false;
 
-    if (gzero)
-        exit(1);
+    if (rzero || dr < dg)
+      break;
 
-    while (true)
+    int shift = dr - dg;
+
+    // 最高次係数の比（対数表現で除算）
+    int q = gf[mlt(fg[r.x[dr]],
+                   oinv(g.x[dg]))];
+
+    // r ^= g * q * x^shift
+    for (int j = 0; j <= dg; j++)
     {
-        int dr = deg(&r);
+      if (g.x[j] == 0)
+        continue;
 
-        bool rzero = true;
-        for (int i = 0; i < DEG; i++)
-            if (r.x[i] != 0)
-                rzero = false;
+      int k = j + shift;
+      int product = gf[mlt(fg[g.x[j]], fg[q])];
 
-        if (rzero || dr < dg)
-            break;
+      r.x[k] = fg[r.x[k]] ^ product;
 
-        int shift = dr - dg;
-
-        // 最高次係数の比（対数表現で除算）
-        int q = gf[mlt(fg[r.x[dr]],
-                    oinv(g.x[dg]))];
-
-        // r ^= g * q * x^shift
-        for (int j = 0; j <= dg; j++)
-        {
-            if (g.x[j] == 0)
-                continue;
-
-            int k = j + shift;
-            int product = gf[mlt(fg[g.x[j]], fg[q])];
-
-            r.x[k] = fg[r.x[k]] ^ product;
-
-            // 通常表現から対数表現へ戻す
-            r.x[k] = (r.x[k] == 0) ? 0 : fg[r.x[k]];
-        }
-
-        // 最高次項が消えていないなら異常
-        if (deg(&r) >= dr)
-        {
-            printf("vmod: degree did not decrease\n");
-            exit(1);
-        }
+      // 通常表現から対数表現へ戻す
+      r.x[k] = (r.x[k] == 0) ? 0 : fg[r.x[k]];
     }
 
-    return r;
-}
+    // 最高次項が消えていないなら異常
+    if (deg(&r) >= dr)
+    {
+      printf("vmod: degree did not decrease\n");
+      exit(1);
+    }
+  }
 
+  return r;
+}
 
 // vec 多項式の剰余 (f mod g)
 // 係数は通常表現（GF(2^E) の元そのもの）で保持する。
 vec vmod(vec f, vec g)
 {
-    vec r = f;
-    int i;
+  vec r = f;
+  int i;
 
-    // g の次数を求める（零多項式なら -1）
-    int dg = -1;
-    for (i = DEG - 1; i >= 0; i--)
+  // g の次数を求める（零多項式なら -1）
+  int dg = -1;
+  for (i = DEG - 1; i >= 0; i--)
+  {
+    if (g.x[i] != 0)
     {
-        if (g.x[i] != 0)
-        {
-            dg = i;
-            break;
-        }
+      dg = i;
+      break;
     }
-    if (dg < 0)
+  }
+  if (dg < 0)
+  {
+    fprintf(stderr, "vmod: division by zero polynomial\n");
+    exit(1);
+  }
+
+  // g の最高次係数の逆元（元のコードと同じく oinv の戻り値を mlt にそのまま渡す）
+  const int inv_lead = oinv(g.x[dg]);
+
+  // r の次数を求める（零多項式なら -1）
+  int dr = -1;
+  for (i = DEG - 1; i >= 0; i--)
+  {
+    if (r.x[i] != 0)
     {
-        fprintf(stderr, "vmod: division by zero polynomial\n");
-        exit(1);
+      dr = i;
+      break;
     }
+  }
 
-    // g の最高次係数の逆元（元のコードと同じく oinv の戻り値を mlt にそのまま渡す）
-    const int inv_lead = oinv(g.x[dg]);
+  // 零多項式（dr = -1）や dr < dg なら、そのまま剰余
+  while (dr >= dg)
+  {
+    int shift = dr - dg;
 
-    // r の次数を求める（零多項式なら -1）
-    int dr = -1;
-    for (i = DEG - 1; i >= 0; i--)
+    // 最高次係数の比 q = r[dr] / g[dg]
+    int q = gf[mlt(fg[r.x[dr]], inv_lead)];
+
+    // r ^= q * x^shift * g
+    for (int j = 0; j <= dg; j++)
     {
-        if (r.x[i] != 0)
-        {
-            dr = i;
-            break;
-        }
-    }
-
-    // 零多項式（dr = -1）や dr < dg なら、そのまま剰余
-    while (dr >= dg)
-    {
-        int shift = dr - dg;
-
-        // 最高次係数の比 q = r[dr] / g[dg]
-        int q = gf[mlt(fg[r.x[dr]], inv_lead)];
-
-        // r ^= q * x^shift * g
-        for (int j = 0; j <= dg; j++)
-        {
-            if (g.x[j] == 0)
-                continue;
-            r.x[j + shift] ^= gf[mlt(fg[g.x[j]], fg[q])];
-        }
-
-        // 最高次項が消えていないなら異常
-        if (r.x[dr] != 0)
-        {
-            fprintf(stderr, "vmod: leading term was not eliminated\n");
-            exit(1);
-        }
-
-        // 次の最高次へ（零多項式になれば dr = -1 でループ終了）
-        while (dr >= 0 && r.x[dr] == 0)
-            dr--;
+      if (g.x[j] == 0)
+        continue;
+      r.x[j + shift] ^= gf[mlt(fg[g.x[j]], fg[q])];
     }
 
-    return r;
+    // 最高次項が消えていないなら異常
+    if (r.x[dr] != 0)
+    {
+      fprintf(stderr, "vmod: leading term was not eliminated\n");
+      exit(1);
+    }
+
+    // 次の最高次へ（零多項式になれば dr = -1 でループ終了）
+    while (dr >= 0 && r.x[dr] == 0)
+      dr--;
+  }
+
+  return r;
 }
-
 
 vec vgcd2(vec xx, vec yy)
 {
-    vec tt = {0};
+  vec tt = {0};
 
-    while (1)
-    {
-        tt = o2v(omod(v2o(xx), v2o(yy)));
-        xx = yy;
-        yy = tt;
-        if(LT(v2o(yy)).a==0)
-        break;
-    }
+  while (1)
+  {
+    tt = o2v(omod(v2o(xx), v2o(yy)));
+    xx = yy;
+    yy = tt;
+    if (LT(v2o(yy)).a == 0)
+      break;
+  }
 
-    return xx;
+  return xx;
 }
 
 // gcd for patterson
@@ -1150,8 +1149,8 @@ OP gcd(OP xx, OP yy)
 
   h.t[0].a = 1;
   h.t[0].n = 0;
-  vec vtmp=o2v(xx);
-  vec temp=o2v(yy);
+  vec vtmp = o2v(xx);
+  vec temp = o2v(yy);
   if (deg(&vtmp) < deg(&temp))
   {
     tmp = xx;
@@ -1178,7 +1177,6 @@ OP gcd(OP xx, OP yy)
   }
   //  return yy;
 }
-
 
 // 整数からベクトル型への変換
 vec i2v(unsigned short n)
@@ -1243,7 +1241,6 @@ static OP bib(int i, OP d, const OP ww[T])
   return t;
 }
 
-
 // chen探索
 static vec chen(vec f)
 {
@@ -1277,58 +1274,60 @@ static vec chen(vec f)
   return e;
 }
 
-
 vec vgcd(vec xx, vec yy)
 {
-    vec tt = {0};
+  vec tt = {0};
 
-    while (1) {
-        // yy がゼロ多項式なら xx が gcd
-        int zero = 1;
-        for (int i = 0; i < DEG; i++) {
-            if (yy.x[i] != 0) {
-                zero = 0;
-                break;
-            }
-        }
-
-        if (zero)
-            break;
-
-        tt = o2v(omod(v2o(xx), v2o(yy)));
-        xx = yy;
-        yy = tt;
+  while (1)
+  {
+    // yy がゼロ多項式なら xx が gcd
+    int zero = 1;
+    for (int i = 0; i < DEG; i++)
+    {
+      if (yy.x[i] != 0)
+      {
+        zero = 0;
+        break;
+      }
     }
 
-    return xx;
+    if (zero)
+      break;
+
+    tt = o2v(omod(v2o(xx), v2o(yy)));
+    xx = yy;
+    yy = tt;
+  }
+
+  return xx;
 }
 
+vec derivative(vec f)
+{
+  vec df = {0};
+  int y = deg(&f);
 
-vec derivative(vec f) {
-    vec df={0};
-    int y = deg(&f);
-
-
-    if(y>0){
-    for (int i = 1; i <= y; i += 2) {
-        df.x[i - 1] = f.x[i];
+  if (y > 0)
+  {
+    for (int i = 1; i <= y; i += 2)
+    {
+      df.x[i - 1] = f.x[i];
     }
-  }  
+  }
 
-    return df;
+  return df;
 }
 
-vec diff(vec a){
-  vec b={0};
+vec diff(vec a)
+{
+  vec b = {0};
 
-  b=derivative(a);
+  b = derivative(a);
 
-  b=(vgcd((a),(b)));
-  
+  b = (vgcd((a), (b)));
 
   return b;
 }
-
 
 // GF(2^m) then set m in this function.
 int ben_or(OP f)
@@ -1341,7 +1340,7 @@ int ben_or(OP f)
     fprintf(stderr, "ben_or: failed to allocate polynomial workspace\n");
     return -1;
   }
-  vec tmp=o2v(f);
+  vec tmp = o2v(f);
   n = deg(&tmp);
 
   if (n == 0)
@@ -1367,14 +1366,12 @@ OP setpol(unsigned short f[], int n)
   return v2o(Setvec(f, n));
 }
 
-
 /* ビット位置 a と b を交換する */
 static unsigned short swap_bits(unsigned short v, unsigned int a, unsigned int b)
 {
-    unsigned int x = ((v >> a) ^ (v >> b)) & 1u;
-    return (unsigned short)(v ^ ((x << a) | (x << b)));
+  unsigned int x = ((v >> a) ^ (v >> b)) & 1u;
+  return (unsigned short)(v ^ ((x << a) | (x << b)));
 }
-
 
 // バイナリ型パリティチェック行列を生成する
 static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
@@ -1387,8 +1384,8 @@ static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
     fprintf(stderr, "invalid check-matrix storage\n");
     exit(EXIT_FAILURE);
   }
-  
-  #pragma omp parallel for schedule(static)
+
+#pragma omp parallel for schedule(static)
   for (i = 0; i < N; i++)
   {
     for (j = 0; j < K; j++)
@@ -1401,7 +1398,6 @@ static void bdet(const unsigned short matrix[N][K], MTX *check_matrix)
       }
     }
   }
-
 }
 
 static void toByte(const MTX *SH,
@@ -1428,13 +1424,14 @@ static void toByte(const MTX *SH,
     // #pragma omp parallel for
     for (j = 0; j < K; j++)
     {
-    unsigned short x=0;
-        k = j * E;
-        x=0;
-        for (int l = 0; l < E; l++){
-          x ^= (SH->x[permutation[i]][k + l] << l);
-          }
-        syndrome_matrix[i][j] = x;
+      unsigned short x = 0;
+      k = j * E;
+      x = 0;
+      for (int l = 0; l < E; l++)
+      {
+        x ^= (SH->x[permutation[i]][k + l] << l);
+      }
+      syndrome_matrix[i][j] = x;
     }
   }
   printf("end of byte\n");
@@ -1465,7 +1462,6 @@ int isqrt(unsigned short u)
   exit(1);
 }
 
-
 // sqrt(x) mod w を求める (w = g0^2 + x*g1^2 のとき sqrt(x) = g0/g1)
 // 成功で0。鍵ごとに1回だけ呼ぶ。
 int osqrt_x(OP w, OP *sx)
@@ -1477,7 +1473,8 @@ int osqrt_x(OP w, OP *sx)
 
   for (i = 0; i < k + 1; i++)
   {
-    if (w.t[i].a == 0) continue;
+    if (w.t[i].a == 0)
+      continue;
     if (w.t[i].n % 2 == 0)
     {
       h.t[j].a = gf[isqrt(w.t[i].a)];
@@ -1489,13 +1486,15 @@ int osqrt_x(OP w, OP *sx)
       r.t[jj++].n = (w.t[i].n - 1) / 2;
     }
   }
-  if (jj == 0) return 1;            // 奇数次の項がない: g が平方式で square-free でない
+  if (jj == 0)
+    return 1; // 奇数次の項がない: g が平方式で square-free でない
 
   if (LT(r).n > 0)
   {
     s = inv(r, w);
     tmp = omod(omul(s, r), w);
-    if (odeg(tmp) != 0 || LT(tmp).a != 1) return 2;   // 逆元が取れない
+    if (odeg(tmp) != 0 || LT(tmp).a != 1)
+      return 2; // 逆元が取れない
     ww = omod(omul(h, s), w);
   }
   else
@@ -1510,7 +1509,8 @@ int osqrt_x(OP w, OP *sx)
   xx.t[0].n = 1;
   xx.t[0].a = 1;
   tmp = oadd(omod(omul(ww, ww), w), xx);
-  if (LT(tmp).a != 0) return 3;
+  if (LT(tmp).a != 0)
+    return 3;
 
   *sx = ww;
   return 0;
@@ -1526,7 +1526,8 @@ OP osqrt_f(OP f, OP w, OP sx)
 
   for (i = 0; i < k + 1; i++)
   {
-    if (f.t[i].a == 0) continue;
+    if (f.t[i].a == 0)
+      continue;
     if (f.t[i].n % 2 == 0)
     {
       even.t[j].n = f.t[i].n / 2;
@@ -1546,7 +1547,8 @@ OP osqrt_f(OP f, OP w, OP sx)
 OP osqrt(OP f, OP w)
 {
   OP sx = {0};
-  if (osqrt_x(w, &sx) != 0) exit(1);
+  if (osqrt_x(w, &sx) != 0)
+    exit(1);
   return osqrt_f(f, w, sx);
 }
 
@@ -1555,73 +1557,87 @@ OP osqrt(OP f, OP w)
 // *T_out: 本当の誤りの数, *extra: 誤って余分に出した位置の数
 int count_correct_old(const vec *e, const vec *d, int n, int *T_out, int *extra)
 {
-    int t = 0, hit = 0, ex = 0;
+  int t = 0, hit = 0, ex = 0;
 
-    for (int i = 0; i < n; i++)
-    {
-        int ei = (e->x[i] != 0);
-        int di = (d->x[i] != 0);
+  for (int i = 0; i < n; i++)
+  {
+    int ei = (e->x[i] != 0);
+    int di = (d->x[i] != 0);
 
-        if (ei) t++;
-        if (ei && di) hit++;       // 正しく見つけた
-        if (!ei && di) ex++;       // 誤って余分に出した
-    }
+    if (ei)
+      t++;
+    if (ei && di)
+      hit++; // 正しく見つけた
+    if (!ei && di)
+      ex++; // 誤って余分に出した
+  }
 
-    if (T_out) *T_out = t;
-    if (extra) *extra = ex;
-    return hit;
+  if (T_out)
+    *T_out = t;
+  if (extra)
+    *extra = ex;
+  return hit;
 }
 
 vec paloma(OP s, OP f)
 {
-    vec x = {0}, v = {0}, zero = {0};
-    x.x[1] = 1;  v.x[0] = 1;
-    OP one = v2o(v);
+  vec x = {0}, v = {0}, zero = {0};
+  x.x[1] = 1;
+  v.x[0] = 1;
+  OP one = v2o(v);
 
-    if (odeg(s) < 0) return zero;          // 誤りなし
+  if (odeg(s) < 0)
+    return zero; // 誤りなし
 
-    OP ss = omod(oadd(one, omul(s, v2o(x))), f);
+  OP ss = omod(oadd(one, omul(s, v2o(x))), f);
 
-    OP g1 = gcd(s, f);
-    OP g2 = gcd(ss, f);
-    OP g12 = odiv(f, omul(g1, g2));
+  OP g1 = gcd(s, f);
+  OP g2 = gcd(ss, f);
+  OP g12 = odiv(f, omul(g1, g2));
 
-    OP s1 = odiv(s, g1);                   // 常に割る
-    OP s2 = odiv(ss, g2);
+  OP s1 = odiv(s, g1); // 常に割る
+  OP s2 = odiv(ss, g2);
 
-    OP denom = omul(g2, s1);
-    if (odeg(gcd(denom, g12)) > 0) {       // f が square-free なら起きないはず
-        printf("denominator not invertible mod g12\n");
-        exit(1);
-    }
+  OP denom = omul(g2, s1);
+  if (odeg(gcd(denom, g12)) > 0)
+  { // f が square-free なら起きないはず
+    printf("denominator not invertible mod g12\n");
+    exit(1);
+  }
 
-    OP u  = omod(omul(omul(g1, s2), inv(denom, g12)), g12);
-    OP sp = osqrt(u, g12);
+  OP u = omod(omul(omul(g1, s2), inv(denom, g12)), g12);
+  OP sp = osqrt(u, g12);
 
-    /* 拡張ユークリッド: rb ≡ tb*sp (mod g12) を保つ */
-    OP ra = g12, rb = sp;
-    OP ta = {0}, tb = one;
-    int Ba = K / 2 - odeg(g2);             // a' の次数の上限
+  /* 拡張ユークリッド: rb ≡ tb*sp (mod g12) を保つ */
+  OP ra = g12, rb = sp;
+  OP ta = {0}, tb = one;
+  int Ba = K / 2 - odeg(g2); // a' の次数の上限
 
-    while (odeg(rb) > Ba) {                // 判定が先
-        OP q = odiv(ra, rb);
-        OP r = omod(ra, rb);
-        OP t = oadd(ta, omul(q, tb));
-        ra = rb;  rb = r;
-        ta = tb;  tb = t;
-    }
-    OP a0 = rb, b0 = tb;
+  while (odeg(rb) > Ba)
+  { // 判定が先
+    OP q = odiv(ra, rb);
+    OP r = omod(ra, rb);
+    OP t = oadd(ta, omul(q, tb));
+    ra = rb;
+    rb = r;
+    ta = tb;
+    tb = t;
+  }
+  OP a0 = rb, b0 = tb;
 
-    OP a = omul(a0, g2);
-    OP b = omul(b0, g1);
-    OP sigma = oadd(omul(a, a), omul(omul(b, b), v2o(x)));
+  OP a = omul(a0, g2);
+  OP b = omul(b0, g1);
+  OP sigma = oadd(omul(a, a), omul(omul(b, b), v2o(x)));
 
-    int yt = odeg(sigma);                   // 誤りの個数 (K に固定しない)
-    if (yt < 1 || yt > K) { printf("decode failed\n"); exit(1); }
+  int yt = odeg(sigma); // 誤りの個数 (K に固定しない)
+  if (yt < 1 || yt > K)
+  {
+    printf("decode failed\n");
+    exit(1);
+  }
 
-    return chen(o2v(sigma));
+  return chen(o2v(sigma));
 }
-
 
 // パターソンアルゴリズムでバイナリGoppa符号を復号する
 vec patterson(vec w_vec, vec f_vec)
@@ -1660,7 +1676,7 @@ vec patterson(vec w_vec, vec f_vec)
   b2 = omod(omul(g1, g1), w);
   printpol(o2v(b2));
   printf(" g1*g1%%w===========\n");
-  vec tmp=o2v(b2);
+  vec tmp = o2v(b2);
   if (deg(&tmp) == 0)
   {
     printf("b2 is 0\n");
@@ -1863,64 +1879,64 @@ void GF_mul(unsigned short *out, unsigned short *in0, unsigned short *in1)
       prod[i - K + 1] ^= prod[i];
       prod[i - K + 0] ^= prod[i];
     }
-             if (K == 96)
-      {
-        prod[i - K + 63] ^= prod[i];
-        prod[i - K + 61] ^= prod[i];
-        prod[i - K + 60] ^= prod[i];
-        prod[i - K + 59] ^= prod[i];
-        prod[i - K + 54] ^= prod[i];
-        prod[i - K + 50] ^= prod[i];
-        prod[i - K + 46] ^= prod[i];
-        prod[i - K + 44] ^= prod[i];
-        prod[i - K + 40] ^= prod[i];
-        prod[i - K + 37] ^= prod[i];
-        prod[i - K + 33] ^= prod[i];
-        prod[i - K + 32] ^= prod[i];
-        prod[i - K + 28] ^= prod[i];
-        prod[i - K + 24] ^= prod[i];
-        prod[i - K + 23] ^= prod[i];
-        prod[i - K + 21] ^= prod[i];
-        prod[i - K + 20] ^= prod[i];
-        prod[i - K + 19] ^= prod[i];
-        prod[i - K + 18] ^= prod[i];
-        prod[i - K + 16] ^= prod[i];
-        prod[i - K + 15] ^= prod[i];
-        prod[i - K + 14] ^= prod[i];
-        prod[i - K + 13] ^= prod[i];
-        prod[i - K + 11] ^= prod[i];
-        prod[i - K + 9] ^= prod[i];
-        prod[i - K + 8] ^= prod[i];
-        prod[i - K + 7] ^= prod[i];
-        prod[i - K + 6] ^= prod[i];
-        prod[i - K + 4] ^= prod[i];
-        prod[i - K + 3] ^= prod[i];
-        prod[i - K + 2] ^= prod[i];
-        prod[i - K + 0] ^= prod[i];
-      }
-      if (K == 64)
-      {
-        prod[i - K + 33] ^= prod[i];
-        prod[i - K + 30] ^= prod[i];
-        prod[i - K + 26] ^= prod[i];
-        prod[i - K + 25] ^= prod[i];
-        prod[i - K + 24] ^= prod[i];
-        prod[i - K + 23] ^= prod[i];
-        prod[i - K + 22] ^= prod[i];
-        prod[i - K + 21] ^= prod[i];
-        prod[i - K + 20] ^= prod[i];
-        prod[i - K + 18] ^= prod[i];
-        prod[i - K + 13] ^= prod[i];
-        prod[i - K + 12] ^= prod[i];
-        prod[i - K + 11] ^= prod[i];
-        prod[i - K + 10] ^= prod[i];
-        prod[i - K + 7] ^= prod[i];
-        prod[i - K + 5] ^= prod[i];
-        prod[i - K + 4] ^= prod[i];
-        prod[i - K + 2] ^= prod[i];
-        prod[i - K + 1] ^= prod[i];
-        prod[i - K + 0] ^= prod[i];
-      }
+    if (K == 96)
+    {
+      prod[i - K + 63] ^= prod[i];
+      prod[i - K + 61] ^= prod[i];
+      prod[i - K + 60] ^= prod[i];
+      prod[i - K + 59] ^= prod[i];
+      prod[i - K + 54] ^= prod[i];
+      prod[i - K + 50] ^= prod[i];
+      prod[i - K + 46] ^= prod[i];
+      prod[i - K + 44] ^= prod[i];
+      prod[i - K + 40] ^= prod[i];
+      prod[i - K + 37] ^= prod[i];
+      prod[i - K + 33] ^= prod[i];
+      prod[i - K + 32] ^= prod[i];
+      prod[i - K + 28] ^= prod[i];
+      prod[i - K + 24] ^= prod[i];
+      prod[i - K + 23] ^= prod[i];
+      prod[i - K + 21] ^= prod[i];
+      prod[i - K + 20] ^= prod[i];
+      prod[i - K + 19] ^= prod[i];
+      prod[i - K + 18] ^= prod[i];
+      prod[i - K + 16] ^= prod[i];
+      prod[i - K + 15] ^= prod[i];
+      prod[i - K + 14] ^= prod[i];
+      prod[i - K + 13] ^= prod[i];
+      prod[i - K + 11] ^= prod[i];
+      prod[i - K + 9] ^= prod[i];
+      prod[i - K + 8] ^= prod[i];
+      prod[i - K + 7] ^= prod[i];
+      prod[i - K + 6] ^= prod[i];
+      prod[i - K + 4] ^= prod[i];
+      prod[i - K + 3] ^= prod[i];
+      prod[i - K + 2] ^= prod[i];
+      prod[i - K + 0] ^= prod[i];
+    }
+    if (K == 64)
+    {
+      prod[i - K + 33] ^= prod[i];
+      prod[i - K + 30] ^= prod[i];
+      prod[i - K + 26] ^= prod[i];
+      prod[i - K + 25] ^= prod[i];
+      prod[i - K + 24] ^= prod[i];
+      prod[i - K + 23] ^= prod[i];
+      prod[i - K + 22] ^= prod[i];
+      prod[i - K + 21] ^= prod[i];
+      prod[i - K + 20] ^= prod[i];
+      prod[i - K + 18] ^= prod[i];
+      prod[i - K + 13] ^= prod[i];
+      prod[i - K + 12] ^= prod[i];
+      prod[i - K + 11] ^= prod[i];
+      prod[i - K + 10] ^= prod[i];
+      prod[i - K + 7] ^= prod[i];
+      prod[i - K + 5] ^= prod[i];
+      prod[i - K + 4] ^= prod[i];
+      prod[i - K + 2] ^= prod[i];
+      prod[i - K + 1] ^= prod[i];
+      prod[i - K + 0] ^= prod[i];
+    }
     if (K == 32)
     {
       // 32
@@ -2037,7 +2053,6 @@ static inline unsigned short eval(const unsigned short *c, unsigned short lx)
   return q;
 }
 
-
 /* input: f, element in GF((2^m)^t) */
 /* output: out, minimal polynomial of f */
 /* return: 0 for success and -1 for failure */
@@ -2096,7 +2111,7 @@ int mykey(unsigned short *out, vec x)
 
 // matrix[j][i] = (Σ_{m=0}^{i} g[m]·α_j^(i-m)) / g(α_j),  α_j = j
 static void matrix_horner(const vec *polynomial,
-                          const unsigned short *tr,   // tr[j] = oinv(g(j))
+                          const unsigned short *tr, // tr[j] = oinv(g(j))
                           unsigned short matrix[N][K])
 {
 #pragma omp parallel for schedule(static)
@@ -2113,50 +2128,62 @@ static void matrix_horner(const vec *polynomial,
   }
 }
 
-
 int mkg(unsigned short matrix[N][K], vec *result)
 {
   OP w = {0};
   vec pp = {0}, polynomial = {0};
   unsigned short *tr = calloc(N, sizeof(*tr));
   unsigned short *ta = calloc(N, sizeof(*ta));
-  if (!tr || !ta) { free(tr); free(ta); return -1; }
-
-bool found = false;
-for (int attempt = 0; attempt < 100 && !found; attempt++)
-{
-  memset(pp.x, 0, sizeof(pp.x));
-  for (int i = 0; i < K; i++) pp.x[i] = rand() % N;
-  pp.x[K] = 1;
-  w = setpol(pp.x, K + 1);
-  polynomial = o2v(w);
-
-  int has_root = 0;   /* 試行ごとに0に戻す */
-#pragma omp parallel for schedule(static)
-  for (int i = 0; i < N; i++)
+  if (!tr || !ta)
   {
-    int skip;
-#pragma omp atomic read
-    skip = has_root;
-    if (skip) continue;
-    ta[i] = i ? eval(polynomial.x, fg[i]) : polynomial.x[0];
-    if (ta[i] == 0)
-    {
-#pragma omp atomic write
-      has_root = 1;
-    }
+    free(tr);
+    free(ta);
+    return -1;
   }
-  found = !has_root;
-}
-  if (!found) { free(tr); free(ta); return -1; }
 
-  for (int i = 0; i < N; i++) tr[i] = oinv(ta[i]);
+  bool found = false;
+  for (int attempt = 0; attempt < 100 && !found; attempt++)
+  {
+    memset(pp.x, 0, sizeof(pp.x));
+    for (int i = 0; i < K; i++)
+      pp.x[i] = rand() % N;
+    pp.x[K] = 1;
+    w = setpol(pp.x, K + 1);
+    polynomial = o2v(w);
+
+    int has_root = 0; /* 試行ごとに0に戻す */
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < N; i++)
+    {
+      int skip;
+#pragma omp atomic read
+      skip = has_root;
+      if (skip)
+        continue;
+      ta[i] = i ? eval(polynomial.x, fg[i]) : polynomial.x[0];
+      if (ta[i] == 0)
+      {
+#pragma omp atomic write
+        has_root = 1;
+      }
+    }
+    found = !has_root;
+  }
+  if (!found)
+  {
+    free(tr);
+    free(ta);
+    return -1;
+  }
+
+  for (int i = 0; i < N; i++)
+    tr[i] = oinv(ta[i]);
   matrix_horner(&pp, tr, matrix);
   *result = o2v(w);
-  free(tr); free(ta);
+  free(tr);
+  free(ta);
   return 0;
 }
-
 
 // Niederreiter暗号の公開鍵を作る
 vec pubkeygen(unsigned short permutation[N],
@@ -2171,7 +2198,7 @@ vec pubkeygen(unsigned short permutation[N],
   double t0 = now();
 
   if (field_matrix == NULL ||
-      //matrix_init(&check_matrix, N, K * E) != 0 ||
+      // matrix_init(&check_matrix, N, K * E) != 0 ||
       matrix_init(&scrambler, K * E, K * E) != 0 ||
       matrix_init(inverse_scrambler, K * E, K * E) != 0)
   {
@@ -2184,7 +2211,6 @@ vec pubkeygen(unsigned short permutation[N],
     exit(EXIT_FAILURE);
   }
 
-  
   if (mkg(field_matrix, &w) != 0)
   {
     free(field_matrix);
@@ -2196,31 +2222,33 @@ vec pubkeygen(unsigned short permutation[N],
   }
   printpol(w);
   printf(" ==goppa polynomial\n");
-  printf("Uh!-mkg: %.3f s\n", now() - t0); t0 = now();            // ← ② mkg の if ブロックの閉じ括弧の後
+  printf("Uh!-mkg: %.3f s\n", now() - t0);
+  t0 = now(); // ← ② mkg の if ブロックの閉じ括弧の後
 
-  //fp = fopen("sk.key", "wb");
-  //fwrite(g, 2, K + 1, fp);
-  //fclose(fp);
+  // fp = fopen("sk.key", "wb");
+  // fwrite(g, 2, K + 1, fp);
+  // fclose(fp);
   printpol(w);
   printf("\n");
   printsage(w);
   printf("\n");
   printf("sagemath で既約性を検査してください！\n");
 
-  //bdet(field_matrix, &check_matrix);
-  //free(field_matrix);
+  // bdet(field_matrix, &check_matrix);
+  // free(field_matrix);
 
   Pgen(permutation);
-  //fp = fopen("P.key", "w");
-  //fclose(fp);
-  printf("Uh!-Pgen: %.3f s\n", now() - t0); t0 = now();
+  // fp = fopen("P.key", "w");
+  // fclose(fp);
+  printf("Uh!-Pgen: %.3f s\n", now() - t0);
+  t0 = now();
   /*
   if (random_full_rank_binary_matrix(&scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to generate a full-rank scrambler matrix\n");
     exit(EXIT_FAILURE);
   }
-  
+
   if (is_reg(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to invert generated full-rank scrambler matrix\n");
@@ -2228,18 +2256,19 @@ vec pubkeygen(unsigned short permutation[N],
   }
   */
   // random_full_rank_binary_matrix と is_reg の後
-  printf("Uh!-scrambler: %.3f s\n", now() - t0); t0 = now();
-  
-  
+  printf("Uh!-scrambler: %.3f s\n", now() - t0);
+  t0 = now();
+
   if (random_full_rank_binary_matrix_inv(&scrambler, inverse_scrambler, rng) != 0)
   {
     fprintf(stderr, "failed to generate the scrambler matrix and its inverse\n");
     exit(EXIT_FAILURE);
   }
-  
-  printf("Uh!-scrambler+inverse: %.3f s\n", now() - t0); t0 = now();
 
-  //exit(1);
+  printf("Uh!-scrambler+inverse: %.3f s\n", now() - t0);
+  t0 = now();
+
+  // exit(1);
 
   /*
     fp = fopen("inv_S.key", "wb");
@@ -2277,9 +2306,23 @@ vec pubkeygen(unsigned short permutation[N],
     matrix_free(inverse_scrambler);
     exit(EXIT_FAILURE);
   }
+  /*
+  uint64_t *tt = malloc(NB * TW * sizeof *tt); // 2,023,424 バイト
+  size_t fail;
+  if (pubkey_systematic(syndrome_matrix, tt, &fail) == 0)
+  {
+    pubkey_systematic_print(tt, 4, 4);
+    pubkey_systematic_write("pubkey_T.bin", tt);
+  }
+  else
+  {
+    fprintf(stderr, "左ブロックが非正則(列 %zu)\n", fail);
+  }
+  exit(1);
+  */
   // pubkey_pack の後
   printf("Uh!-pubkey_pack: %.3f s\n", now() - t0);
-  
+
   // 一致確認(OK と出たら、このブロックは削除してよい)
   /*
   {
@@ -2303,7 +2346,6 @@ vec pubkeygen(unsigned short permutation[N],
   matrix_free(&public_check_matrix);
   return w;
 }
-
 
 static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
 {
@@ -2347,7 +2389,7 @@ static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
   return Setvec(uk, K);
 }
 
-int ero2(vec v, const unsigned short permutation[N],unsigned short *ya)
+int ero2(vec v, const unsigned short permutation[N], unsigned short *ya)
 {
   int i, count = 0;
   unsigned short xa[N] = {0};
