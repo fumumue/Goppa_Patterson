@@ -14,7 +14,7 @@ SOURCES := main.c Patterson.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 TEST_OBJECTS := $(filter-out $(BUILD_DIR)/main.o,$(OBJECTS))
 
-.PHONY: all test clean
+.PHONY: all test bench clean
 
 all: $(TARGET)
 
@@ -38,7 +38,18 @@ $(TEST_TARGET): $(BUILD_DIR)/pointer-equivalence.o $(TEST_OBJECTS)
 test: $(TEST_TARGET)
 	./$(TEST_TARGET)
 
--include $(OBJECTS:.o=.d) $(BUILD_DIR)/pointer-equivalence.d
+BENCH_TARGET := $(BUILD_DIR)/bench
+
+
+$(BUILD_DIR)/bench.o: tests/bench.c common.h global.h struct.h simd.h | $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(OPENMP_FLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BENCH_TARGET): $(BUILD_DIR)/bench.o $(TEST_OBJECTS)
+	$(CC) $(LDFLAGS) $(OPENMP_FLAGS) $^ $(LDLIBS) -o $@
+
+bench: $(BENCH_TARGET)
+	./$(BENCH_TARGET)
+-include $(OBJECTS:.o=.d) $(BUILD_DIR)/pointer-equivalence.d $(BUILD_DIR)/bench.d
 
 clean:
 	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.d $(TARGET) $(TEST_TARGET)
