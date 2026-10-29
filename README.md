@@ -1,10 +1,4 @@
-# Goppa_Patterson
-
-encode:Niederreiter
-
-decode:Patterson
-
-## Goppa符号とPattersonアルゴリズム
+# Goppa符号とPattersonアルゴリズム
 
 ### Goppa符号の概要
 
