@@ -9,7 +9,6 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 
-
 #define REG 64
 extern void makeS();
 
@@ -2306,6 +2305,23 @@ vec pubkeygen(unsigned short permutation[N],
     matrix_free(inverse_scrambler);
     exit(EXIT_FAILURE);
   }
+
+  /*
+  uint64_t *tmat = malloc((size_t)K * E * ((N - (size_t)K * E) / 64) * sizeof *tmat);
+  uint16_t colperm[N];
+  size_t rank;
+  if (pubkey_systematic_pivot_H(field_matrix, permutation, tmat, colperm, &rank) == 0)
+  {
+    pubkey_systematic_print(tmat, 4, 4);
+    pubkey_systematic_write("pubkey_T.bin", tmat);
+  }
+  else
+  {
+    fprintf(stderr, "失敗: rank=%zu / %zu\n", rank, (size_t)K * E);
+  }
+  free(tmat);
+  */
+  // Uh!
   /*
   uint64_t *tt = malloc(NB * TW * sizeof *tt); // 2,023,424 バイト
   size_t fail;

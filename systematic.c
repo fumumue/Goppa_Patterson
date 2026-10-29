@@ -79,3 +79,141 @@ int pubkey_systematic_write(const char *path, const uint64_t *tt)
     fclose(f);
     return n == NB * TW ? 0 : -1;
 }
+
+// systematic.c
+#ifndef NB
+#define NB ((size_t)K * E)            // 3328 : シンドローム長(行数)
+#endif
+#ifndef RW
+#define RW ((size_t)N / 64)           // 128  : 長さ N の行の語数
+#endif
+#ifndef TW
+#define TW ((size_t)(N - NB) / 64)    // 76   : T の1行の語数
+#endif
+_Static_assert(((size_t)K * E) % 64 == 0, "K*E must be a multiple of 64");
+_Static_assert(N % 64 == 0, "N must be a multiple of 64");
+
+// H(field_matrix と permutation)から、S を使わずに直接 [I|T] を作り、
+// I を除いた T を tmat に返す。
+//   field_matrix[r] : サポート r の列(K 個の 13 ビット要素)
+//   permutation[i]  : 位置 i が使うサポート番号
+//   tmat            : NB 行 × TW 語(呼び出し側で NB*TW*8 バイト確保)
+//   colperm[j]      : 並べ替え後の位置 j → 元の位置 i
+//                     前半 NB 個がピボット列、後半 N-NB 個が T の列
+//   rank_out        : 到達した階数(NULL 可)
+// 戻り値: 0 成功 / -1 失敗(階数が NB 未満、または不正な入力、メモリ不足)
+int pubkey_systematic_pivot_H(const unsigned short field_matrix[N][K],
+                              const unsigned short permutation[N],
+                              uint64_t *tmat, uint16_t colperm[N],
+                              size_t *rank_out)
+{
+    if (rank_out) *rank_out = 0;
+
+    for (size_t i = 0; i < N; ++i)
+        if (permutation[i] >= N) return -1;
+
+    uint64_t *hm = calloc(NB * RW, sizeof *hm);
+    uint16_t *pivcol = malloc(NB * sizeof *pivcol);
+    unsigned char *is_piv = calloc(N, 1);
+    if (!hm || !pivcol || !is_piv) {
+        free(hm); free(pivcol); free(is_piv);
+        return -1;
+    }
+
+    // 転置: 64 列ずつのブロックで並列化(ブロックごとに書き込む語が別)
+    #pragma omp parallel for schedule(static)
+    for (size_t blk = 0; blk < RW; ++blk) {
+        for (size_t t = 0; t < 64; ++t) {
+            const size_t i = blk * 64 + t;
+            const unsigned short *colv = field_matrix[permutation[i]];
+            for (size_t j = 0; j < K; ++j) {
+                unsigned v = colv[j];
+                for (size_t b = 0; b < E; ++b)
+                    if ((v >> b) & 1)
+                        hm[(j * E + b) * RW + blk] |= (uint64_t)1 << t;
+            }
+        }
+    }
+
+    // 消去: 並列領域は 1 回だけ作る
+    size_t rank = 0, col = 0, piv_row = 0;
+    int piv_found = 0;
+
+    #pragma omp parallel 
+    {
+        while(1) {
+            // ピボット探索と行の入れ替えは 1 スレッドで行う
+            #pragma omp single
+            {
+                piv_found = 0;
+                while (col < N && rank < NB) {
+                    const size_t w = col / 64;
+                    const uint64_t m = (uint64_t)1 << (col % 64);
+                    size_t p = rank;
+                    while (p < NB && !(hm[p * RW + w] & m)) ++p;
+                    if (p < NB) {
+                        if (p != rank)
+                            for (size_t k = w; k < RW; ++k) {
+                                uint64_t t = hm[p * RW + k];
+                                hm[p * RW + k] = hm[rank * RW + k];
+                                hm[rank * RW + k] = t;
+                            }
+                        piv_row = rank;
+                        piv_found = 1;
+                        break;                 // この col がピボット列
+                    }
+                    ++col;                     // 独立でない列は飛ばす
+                }
+            }   // single の終わりで全スレッドが待ち合わせる
+
+            if (!piv_found) break;             // 全スレッドが同じ値を見て抜ける
+
+            const size_t w = col / 64;
+            const uint64_t m = (uint64_t)1 << (col % 64);
+            const uint64_t *prow = hm + piv_row * RW;
+
+            #pragma omp for schedule(static)
+            for (size_t r = 0; r < NB; ++r) {
+                if (r == piv_row) continue;
+                uint64_t *row = hm + r * RW;
+                if (row[w] & m)
+                    for (size_t k = w; k < RW; ++k) row[k] ^= prow[k];
+            }   // for の終わりでも待ち合わせる
+
+            #pragma omp single
+            {
+                pivcol[rank++] = (uint16_t)col;
+                is_piv[col] = 1;
+                ++col;
+            }
+        }
+    }
+
+    if (rank_out) *rank_out = rank;
+    if (rank < NB) {                           // 本当の階数不足
+        free(hm); free(pivcol); free(is_piv);
+        return -1;
+    }
+
+    // 並べ替え: ピボット列 → 残りの列(昇順)
+    size_t pos = 0;
+    for (size_t r = 0; r < NB; ++r) colperm[pos++] = pivcol[r];
+    for (size_t c = 0; c < N; ++c)
+        if (!is_piv[c]) colperm[pos++] = (uint16_t)c;
+
+    // T を詰めて取り出す(I は捨てる)
+    memset(tmat, 0, NB * TW * sizeof *tmat);
+    #pragma omp parallel for schedule(static)
+    for (size_t r = 0; r < NB; ++r) {
+        for (size_t k = 0; k < N - NB; ++k) {
+            size_t orig = colperm[NB + k];
+            uint64_t bit = (hm[r * RW + orig / 64] >> (orig % 64)) & 1;
+            tmat[r * TW + k / 64] |= bit << (k % 64);
+        }
+    }
+
+    free(hm); free(pivcol); free(is_piv);
+    return 0;
+}
+
+

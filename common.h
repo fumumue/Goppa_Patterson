@@ -67,7 +67,12 @@ int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng);
 int random_full_rank_binary_matrix_inv(MTX *S, MTX *Sinv, RNG *rng);
 static int check_inverse(const MTX *S, const MTX *Sinv, RNG *rng);
-
+int  pubkey_systematic_pivot_H(const unsigned short field_matrix[N][K],
+                               const unsigned short permutation[N],
+                               uint64_t *tmat, uint16_t colperm[N],
+                               size_t *rank_out);
+void pubkey_systematic_print(const uint64_t *tmat, size_t show_rows, size_t show_words);
+int  pubkey_systematic_write(const char *path, const uint64_t *tmat);
 int mkerr(unsigned short *z1, int num, RNG *rng);
 int mkS(const MTX *cc, MTX *R);
 int mkRS(const MTX *cc, MTX *R);
