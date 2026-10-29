@@ -88,7 +88,7 @@ $$
 
 $S(x)$ の逆元、平方根、拡張ユークリッド互除法は、すべて $\bmod\ g(x)$ の世界で計算します。そのため、シンドロームは $1, x, \dots, x^{t-1}$ を基底とする係数ベクトルの形になっている必要があります。
 
-##### 係数が現れる場所
+#### 係数が現れる場所
 
 $g(x) = \sum_{k=0}^{t} g_k x^k$ とします。$\bmod\ g(x)$ では次が成り立ちます。
 
@@ -120,7 +120,7 @@ $$
 - $V$ はヴァンデルモンド行列で、$V_{l,i} = \alpha_i^{l}$ です。
 - $D = \mathrm{diag}\bigl(g(\alpha_1)^{-1}, \dots, g(\alpha_n)^{-1}\bigr)$ です。
 
-##### 係数の役割
+#### 係数の役割
 
 | 項目 | 役割 |
 |------|------|
@@ -152,7 +152,7 @@ Niederreiter暗号の公開鍵は、この行列の各成分を $\mathbb{F}_2$ �
 
 ---
 
-### Patterson アルゴリズム
+## Patterson アルゴリズム
 
 二元Goppa符号に対する効率的な復号アルゴリズムです(Patterson, 1975)。受信語 $r = c + e$($c \in \Gamma(L,g)$、
 $\mathrm{wt}(e) \le t$)から誤り $e$ を復元します。
@@ -235,7 +235,7 @@ $\mathbb{F}_{2^m}[x]/(g)$
 - V. D. Goppa, "A new class of linear error-correcting codes," *Probl. Inf. Transm.*, 6(3), 1970.
 - R. J. McEliece, "A public-key cryptosystem based on algebraic coding theory," *DSN Progress Report*, 1978.
   
-## ビルド
+# ビルド
 
 `make` は各ソースを個別にコンパイルし、`build/patterson` にリンクします。
 `make test` で固定入力の多項式演算テストを実行し、`make clean` で生成物を削除できます。
