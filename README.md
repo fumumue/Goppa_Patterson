@@ -28,20 +28,19 @@ $$
 
 #### 検査行列
 
-$\mathbb{F}_{2^m}$ 上の $'t \times n'$ 行列
+$g(x) = \sum_{k=0}^{t} g_k x^k$ とすると、Patterson の復号で使うシンドローム $S(x)$ の係数は、$\mathbb{F}_{2^m}$ 上の $t \times n$ 行列
 
-$$
-H = \begin{pmatrix}
-g(\alpha_1)^{-1} & \cdots & g(\alpha_n)^{-1} \\
-\alpha_1 g(\alpha_1)^{-1} & \cdots & \alpha_n g(\alpha_n)^{-1} \\
-\vdots & & \vdots \\
-\alpha_1^{t-1} g(\alpha_1)^{-1} & \cdots & \alpha_n^{t-1} g(\alpha_n)^{-1}
-\end{pmatrix}
-$$
+```math
+H = T V D
+```
 
-を各成分 $\mathbb{F}_2$ 上の $m$ 次元ベクトルに展開すると、
-$mt \times n$
-の二元検査行列が得られます。
+で与えられます。
+
+- $T_{j,l} = g_{j+l+1}$($j+l+1 > t$ のとき 0):$g(x)$ の係数からなる $t \times t$ 行列
+- $V_{l,i} = \alpha_i^{\,l}$:ヴァンデルモンド行列
+- $D = \mathrm{diag}(1/g(\alpha_1), \dots, 1/g(\alpha_n))$
+
+各成分を $\mathbb{F}_2$ 上の $m$ 次元ベクトルに展開すると、$mt \times n$ の二元検査行列になります。
 
 ---
 
