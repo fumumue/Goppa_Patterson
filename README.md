@@ -28,19 +28,55 @@ $$
 
 #### 検査行列
 
-$g(x) = \sum_{k=0}^{t} g_k x^k$ とすると、Patterson の復号で使うシンドローム $S(x)$ の係数は、$\mathbb{F}_{2^m}$ 上の $t \times n$ 行列
+#### 検査行列
 
-```math
+$g(x) = \sum_{k=0}^{t} g_k x^k$ とします。$\mathbb{F}_{2^m}$ 上の $t \times n$ 行列
+
+$$
 H = T V D
-```
+$$
 
-で与えられます。
+を考えます。ここで $T$、$V$、$D$ は次のとおりです。
 
-- $T_{j,l} = g_{j+l+1}$($j+l+1 > t$ のとき 0):$g(x)$ の係数からなる $t \times t$ 行列
-- $V_{l,i} = \alpha_i^{\,l}$:ヴァンデルモンド行列
-- $D = \mathrm{diag}(1/g(\alpha_1), \dots, 1/g(\alpha_n))$
+$$
+T = \begin{pmatrix}
+g_1 & g_2 & \cdots & g_{t-1} & g_t \\
+g_2 & g_3 & \cdots & g_t & 0 \\
+\vdots & \vdots & & \vdots & \vdots \\
+g_{t-1} & g_t & \cdots & 0 & 0 \\
+g_t & 0 & \cdots & 0 & 0
+\end{pmatrix}
+$$
 
-各成分を $\mathbb{F}_2$ 上の $m$ 次元ベクトルに展開すると、$mt \times n$ の二元検査行列になります。
+$$
+V = \begin{pmatrix}
+1 & \cdots & 1 \\
+\alpha_1 & \cdots & \alpha_n \\
+\vdots & & \vdots \\
+\alpha_1^{t-1} & \cdots & \alpha_n^{t-1}
+\end{pmatrix},
+\quad
+D = \begin{pmatrix}
+g(\alpha_1)^{-1} & & \\
+& \ddots & \\
+& & g(\alpha_n)^{-1}
+\end{pmatrix}
+$$
+
+$T$ は $g(x)$ の係数からなる正則行列です。$T$ を省いた $VD$ も同じ符号の検査行列になります。
+
+$$
+VD = \begin{pmatrix}
+g(\alpha_1)^{-1} & \cdots & g(\alpha_n)^{-1} \\
+\alpha_1 g(\alpha_1)^{-1} & \cdots & \alpha_n g(\alpha_n)^{-1} \\
+\vdots & & \vdots \\
+\alpha_1^{t-1} g(\alpha_1)^{-1} & \cdots & \alpha_n^{t-1} g(\alpha_n)^{-1}
+\end{pmatrix}
+$$
+
+$H$ の各成分を $\mathbb{F}_2$ 上の $m$ 次元ベクトルに展開すると、
+$mt \times n$
+の二元検査行列が得られます。
 
 ---
 
