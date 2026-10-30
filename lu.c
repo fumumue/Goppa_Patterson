@@ -1,4 +1,5 @@
 #include "common.h"
+#include "sinv_pack.h"
 
 static unsigned char packed_bit(const uint64_t *row, size_t bit)
 {
@@ -228,6 +229,7 @@ int random_full_rank_binary_matrix_inv(MTX *S, MTX *Sinv, RNG *rng)
       }
     }
   }
+  sinv_pack_register(Sinv, inv, n, words);
   rc = 0;
 
 done:

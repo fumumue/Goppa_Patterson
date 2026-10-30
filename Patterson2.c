@@ -12,6 +12,7 @@
 
 #include "common.h"
 #include "systematic.h"
+#include "sinv_pack.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -1798,9 +1799,15 @@ fail:
 // ===============================================================
 // 暗号化・復号の周辺
 // ===============================================================
+static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
+{
+  unsigned short uk[K];
+  sinv_mul(inverse_scrambler, ss, uk);
+  return Setvec(uk, K);
+}
 
 // シンドローム ss に S^{-1} を掛けて、多項式(vec)に直す
-static vec dec(const MTX *inverse_scrambler, unsigned short ss[])
+static vec dec2(const MTX *inverse_scrambler, unsigned short ss[])
 {
   unsigned char ch[K * E];
   unsigned char h2o[K * E];

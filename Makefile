@@ -10,7 +10,7 @@ DEPFLAGS := -MMD -MP -DNDEBUG
 LDFLAGS ?= -flto
 LDLIBS ?=
 
-SOURCES := main.c Patterson2.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c systematic.c
+SOURCES := main.c Patterson2.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c systematic.c sinv_pack.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 TEST_OBJECTS := $(filter-out $(BUILD_DIR)/main.o,$(OBJECTS))
 
@@ -41,7 +41,7 @@ test: $(TEST_TARGET)
 BENCH_TARGET := $(BUILD_DIR)/bench
 
 
-$(BUILD_DIR)/bench.o: tests/bench.c common.h global.h struct.h simd.h | $(BUILD_DIR)
+$(BUILD_DIR)/bench.o: tests/bench.c common.h global.h struct.h simd.h sinv_pack.h | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(OPENMP_FLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BENCH_TARGET): $(BUILD_DIR)/bench.o $(TEST_OBJECTS)

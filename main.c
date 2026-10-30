@@ -122,7 +122,8 @@ int main(void)
   w = pubkeygen(permutation, &inverse_scrambler, &rng, syndrome_matrix);
 
   memset(z1, 0, (size_t)N * sizeof(*z1));
-  if (mkerr(z1, rand()%K+1, &rng) != 0)
+  //if (mkerr(z1, rand()%K+1, &rng) != 0)
+  if(mkerr(z1,K,&rng) != 0)
   {
     free(z1);
     free(permutation);
@@ -138,8 +139,8 @@ int main(void)
 
   unsigned short ya[N] = {0};
 
-v = paloma(v2o(f), v2o(w));
-// v = patterson(w, f);
+//v = paloma(v2o(f), v2o(w));
+ v = patterson(w, f);
 
 int reported = ero2(v, permutation, ya);   // ya に元の並びの誤りを書き込む
 
