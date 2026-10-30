@@ -4,13 +4,13 @@ TARGET := $(BUILD_DIR)/patterson
 TEST_TARGET := $(BUILD_DIR)/pointer-equivalence
 
 CPPFLAGS ?=
-CFLAGS ?= -Wall -g -O3 -mavx -mavx2 -mtune=native -march=native -ffast-math -funroll-loops 
+CFLAGS ?= -Wall -g -O3 -mavx -mavx2 -mtune=native -march=native -ffast-math -funroll-loops -DVERBOSE
 OPENMP_FLAGS ?= -fopenmp
 DEPFLAGS := -MMD -MP -DNDEBUG
 LDFLAGS ?= -flto
 LDLIBS ?=
 
-SOURCES := main.c Patterson.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c systematic.c
+SOURCES := main.c Patterson2.c ecole.c chash.c lu.c sha3.c inv_mat.c debug.c systematic.c
 OBJECTS := $(SOURCES:%.c=$(BUILD_DIR)/%.o)
 TEST_OBJECTS := $(filter-out $(BUILD_DIR)/main.o,$(OBJECTS))
 
