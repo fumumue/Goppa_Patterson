@@ -226,34 +226,34 @@ $\mathbb{F}_{2^m}[x]/(g)$
 
 ### 20261030:新記録
 |iter  4: keygen 0.200s  encrypt 0.000s  decode 0.015s  [PASS]
-|------|--------|------|------|-------|
-|stage        | min(ms) |median(ms)  | mean(ms)   | max(ms)
-|keygen         | 119.8     | 183.4     | 165.4     | 203.4
-|encrypt          | 0.1       | 0.1       | 0.1       | 0.2
-|decode          | 12.9      | 15.4      | 19.3      | 36.3
-|total          | 133.3     | 200.2     | 184.8     | 219.0
+|------|--------:|------:|------:|-------:|
+|stage        | min(ms) |median(ms)  | mean(ms)   | max(ms)|
+|keygen         | 119.8     | 183.4     | 165.4     | 203.4|
+|encrypt          | 0.1       | 0.1       | 0.1       | 0.2|
+|decode          | 12.9      | 15.4      | 19.3      | 36.3|
+|total          | 133.3     | 200.2     | 184.8     | 219.0|
 
 verify: PASS 5 / FAIL 0
 
 === libmceliece 8192128f / 1コア固定 (CPU 0) ===
-|------|------|------|------|------|
+|------:|------:|------:|------:|------:|
 |mceliece8192128f  (runs=20)
-|stage      | min(ms) |median(ms)  | mean(ms)   | max(ms)
-|keygen       | 157.9     | 197.7     | 203.4     | 255.3
-|encrypt        | 0.2       | 0.2       | 0.2       | 0.3
-|decode         | 0.2       | 0.3       | 0.2       | 0.4
-|total        | 158.3     | 198.1     | 203.9     | 255.8
+|stage      | min(ms) |median(ms)  | mean(ms)   | max(ms)|
+|keygen       | 157.9     | 197.7     | 203.4     | 255.3|
+|encrypt        | 0.2       | 0.2       | 0.2       | 0.3|
+|decode         | 0.2       | 0.3       | 0.2       | 0.4|
+|total        | 158.3     | 198.1     | 203.9     | 255.8|
 
 verify: PASS 20 / FAIL 0
 
 === libmceliece 8192128 / 1コア固定 (CPU 0) ===
-|------|------|------|------|------|
+|------:|------:|------:|------:|------:|
 mceliece8192128  (runs=20)
-|stage      | min(ms) |median(ms)   |mean(ms)    |max(ms)
-|keygen       | 171.1     | 242.9      |261.3     | 551.6
-|encrypt        | 0.2       | 0.2       | 0.2       | 0.3
-|decode         | 0.2       | 0.2       | 0.2       | 0.5
-|total        | 171.5     | 243.4     | 261.7    | 552.1
+|stage      | min(ms) |median(ms)   |mean(ms)    |max(ms)|
+|keygen       | 171.1     | 242.9      |261.3     | 551.6|
+|encrypt        | 0.2       | 0.2       | 0.2       | 0.3|
+|decode         | 0.2       | 0.2       | 0.2       | 0.5|
+|total        | 171.5     | 243.4     | 261.7    | 552.1|
 
 verify: PASS 20 / FAIL 0
 
