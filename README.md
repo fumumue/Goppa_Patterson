@@ -225,9 +225,9 @@ $\mathbb{F}_{2^m}[x]/(g)$
 - 計測環境: CPU=Athlon220G、コンパイラ=gcc、スレッド数(`OMP_NUM_THREADS=4`)
 
 ### 20261030:新記録
-|iter  4: keygen 0.200s  encrypt 0.000s  decode 0.015s  [PASS]
-|------|--------:|------:|------:|-------:|
-|stage        | min(ms) |median(ms)  | mean(ms)   | max(ms)|
+
+|stage | min(ms) |median(ms)  | mean(ms)   | max(ms)|
+|------|--------:|------:|------:|-------:| 
 |keygen         | 119.8     | 183.4     | 165.4     | 203.4|
 |encrypt          | 0.1       | 0.1       | 0.1       | 0.2|
 |decode          | 12.9      | 15.4      | 19.3      | 36.3|
@@ -236,9 +236,9 @@ $\mathbb{F}_{2^m}[x]/(g)$
 verify: PASS 5 / FAIL 0
 
 === libmceliece 8192128f / 1コア固定 (CPU 0) ===
-|------:|------:|------:|------:|------:|
 |mceliece8192128f  (runs=20)
 |stage      | min(ms) |median(ms)  | mean(ms)   | max(ms)|
+|------|------:|------:|------:|------:|
 |keygen       | 157.9     | 197.7     | 203.4     | 255.3|
 |encrypt        | 0.2       | 0.2       | 0.2       | 0.3|
 |decode         | 0.2       | 0.3       | 0.2       | 0.4|
@@ -247,9 +247,9 @@ verify: PASS 5 / FAIL 0
 verify: PASS 20 / FAIL 0
 
 === libmceliece 8192128 / 1コア固定 (CPU 0) ===
-|------:|------:|------:|------:|------:|
-mceliece8192128  (runs=20)
 |stage      | min(ms) |median(ms)   |mean(ms)    |max(ms)|
+|------|------:|------:|------:|------:|
+|mceliece8192128  (runs=20)
 |keygen       | 171.1     | 242.9      |261.3     | 551.6|
 |encrypt        | 0.2       | 0.2       | 0.2       | 0.3|
 |decode         | 0.2       | 0.2       | 0.2       | 0.5|
