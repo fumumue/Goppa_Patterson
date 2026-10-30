@@ -1857,7 +1857,7 @@ int ero2(vec v, const unsigned short permutation[N], unsigned short *ya)
     if (ya[i] > 0)
       printf("error position=%d\n", i);
   }
-  if (count == T * 2)
+  if (count <= T * 2)
     printf("err=%d\n", count);
 #endif
 
