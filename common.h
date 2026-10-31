@@ -44,6 +44,9 @@ vec vmul(vec a, vec b);
 vec fmul(vec a, vec b);
 OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
+void ogt(const unsigned short polynomial[K + 1], unsigned short table[K][K]);
+vec synd(unsigned short zz[],unsigned short matrix[N][K]);
+vec synd_transform(vec f, unsigned short polynomial[K + 1]);
 
 int is_reg(const MTX *cc, MTX *R, RNG *rng);
 int random_full_rank_binary_matrix(MTX *matrix, RNG *rng);

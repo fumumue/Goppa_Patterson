@@ -2,11 +2,14 @@
 
 #include "common.h"
 
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <stdint.h>
+
 #define REG 64
 extern int mlt(int x, int y);
 extern int mltn(int n, int a);
@@ -1682,7 +1685,7 @@ vec patterson(vec w_vec, vec f_vec)
   return v;
 }
 
-static void van(unsigned short powers[K * 2][N])
+static void van(unsigned short powers[K][N])
 {
   int i, j;
 
@@ -1697,7 +1700,7 @@ static void van(unsigned short powers[K * 2][N])
   }
 }
 
-static void ogt(const unsigned short polynomial[K + 1], unsigned short table[K * 2][K * 2])
+void ogt(const unsigned short polynomial[K + 1], unsigned short table[K][K])
 {
   int i, j;
 
@@ -1960,6 +1963,99 @@ int mykey(unsigned short *out, vec x)
   return 0;
 }
 
+vec synd(unsigned short zz[],unsigned short matrix[N][K])
+{
+  unsigned short syn[K] = {0};
+  unsigned short s = 0;
+  int i, j, t1;
+  OP f = {0};
+
+  printf("in synd2\n");
+
+  for (i = 0; i < K; i++)
+  {
+    syn[i] = 0;
+    s = 0;
+    // #pragma omp parallel num_threads(16)
+    for (j = 0; j < N; j++)
+    {
+      s ^= gf[mlt(fg[zz[j]], fg[matrix[j][i]])];
+    }
+    syn[i] = s;
+    // printf ("syn%d,", syn[i]);
+  }
+  // printf ("\n");
+
+  f = setpol(syn, K);
+  printpol(o2v(f));
+  printf(" syn=============\n");
+  //  exit(1);
+
+  return o2v(f);
+}
+
+
+
+typedef uint16_t gff;                 /* GF(2^m) の元 (m <= 16) */
+
+/*
+ * BM用シンドローム sp[0..2t-1] から パターソン用 S(x) の係数 S[0..t-1] を作る。
+ *
+ *   sp[j] = sum_i e_i * a_i^j / g(a_i)^2    (j = 0..2t-1)
+ *   S(x)  = sum_i e_i / (x - a_i) mod g(x)
+ *
+ * g[0..t] は g(x) の係数 (g[t] = 1 のモニック)。
+ * 標数2なので加算・減算はすべて XOR。
+ */
+void bm_to_patterson_syndrome(gff *S, const gff *sp, const gff *g, int t)
+{
+    gff s[t];                          /* g型シンドローム s_j = sum e_i a_i^j / g(a_i) */
+
+    /* 段階1: s_j = sum_{k=0..t} g_k * sp[k+j]   (j = 0..t-1, 最大添字 2t-1) */
+    for (int j = 0; j < t; j++) {
+        gff acc = 0;
+        for (int k = 0; k <= t; k++)
+            acc ^= gf[mlt(fg[g[k]], fg[sp[k + j]])];
+        s[j] = acc;
+    }
+
+    /* 段階2: S[j] = sum_{k=j+1..t} g_k * s[k-1-j]   (j = 0..t-1) */
+    for (int j = 0; j < t; j++) {
+        gff acc = 0;
+        for (int k = j + 1; k <= t; k++)
+            acc ^= gf[mlt(fg[g[k]], fg[s[k - 1 - j]])];
+        S[j] = acc;
+    }
+}
+
+
+vec synd_transform(vec f, unsigned short polynomial[K + 1])
+{
+    unsigned short table[K][K] = {0};
+    unsigned short original[K] = {0};
+    unsigned short result[K] = {0};
+
+    ogt(polynomial, table);
+
+    // 変換前のシンドロームを保存
+    for (int i = 0; i < K; i++)
+        original[i] = f.x[i];
+
+    // 行列とシンドロームの積
+    for (int i = 0; i < K; i++)
+    {
+        for (int j = 0; j < K; j++)
+        {
+            result[i] ^= gf[mlt(fg[table[i][j]], fg[original[j]])];
+        }
+    }
+
+    for (int i = 0; i < K; i++)
+        f.x[i] = result[i];
+
+    return f;
+}
+
 static int mkg(unsigned short matrix[N][K * E], OP *result)
 {
   int i, j, k, l;
@@ -1967,8 +2063,8 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
   unsigned short tr[N] = {0};
   unsigned short ta[N] = {0};
   unsigned short ma[N][K * E] = {0};
-  unsigned short powers[K * 2][N] = {0};
-  unsigned short polynomial_table[K * 2][K * 2] = {0};
+  unsigned short powers[K][N] = {0};
+  unsigned short polynomial_table[K][K] = {0};
 
   // w=setpol(g,K+1);
   // printpol(o2v(w));
@@ -2056,6 +2152,30 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
   van(powers);
   ogt(tt.x, polynomial_table);
 
+  
+/*
+unsigned short syn[K * 2][K * 2] = {0};
+unsigned short original[K * 2] = {0};
+unsigned short transformed[K * 2] = {0};
+
+//ogt(tt.x, syn);
+
+// 変換前のシンドロームを保存
+for (int i = 0; i < K * 2; i++)
+    original[i] = f.x[i];
+
+// 係数行列との積
+for (int i = 0; i < K * 2; i++)
+{
+    for (int j = 0; j < K * 2; j++)
+        transformed[i] ^= gf[mlt(fg[syn[i][j]], fg[original[j]])];
+}
+
+// 変換結果を戻す
+for (int i = 0; i < K * 2; i++)
+    f.x[i] = transformed[i];
+*/
+
   printf("\nすげ、オレもうイキそ・・・\n");
 
   for (j = 0; j < N; j++)
@@ -2065,6 +2185,7 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
       ma[j][i] = gf[mlt(fg[powers[i][j]], tr[j])];
     }
   }
+
 
   unsigned short s;
   for (i = 0; i < K; i++)
@@ -2079,6 +2200,7 @@ static int mkg(unsigned short matrix[N][K * E], OP *result)
       matrix[j][i] = s;
     }
   }
+  
   // printf("\n");
   // exit(1);
 
