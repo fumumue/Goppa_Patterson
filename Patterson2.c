@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <stdint.h>
 
 #include <time.h>
 
@@ -1730,6 +1731,39 @@ int mkg(unsigned short matrix[N][K], vec *result)
   free(ta);
   return 0;
 }
+
+
+
+/*
+ * BM用シンドローム sp[0..2t-1] から パターソン用 S(x) の係数 S[0..t-1] を作る。
+ *
+ *   sp[j] = sum_i e_i * a_i^j / g(a_i)^2    (j = 0..2t-1)
+ *   S(x)  = sum_i e_i / (x - a_i) mod g(x)
+ *
+ * g[0..t] は g(x) の係数 (g[t] = 1 のモニック)。
+ * 標数2なので加算・減算はすべて XOR。
+ */
+void bm_to_patterson_syndrome(unsigned short *S, const unsigned short *sp, const unsigned short *g, int t)
+{
+    unsigned short s[t];                          /* g型シンドローム s_j = sum e_i a_i^j / g(a_i) */
+
+    /* 段階1: s_j = sum_{k=0..t} g_k * sp[k+j]   (j = 0..t-1, 最大添字 2t-1) */
+    for (int j = 0; j < t; j++) {
+        unsigned short acc = 0;
+        for (int k = 0; k <= t; k++)
+            acc ^= gf[mlt(fg[g[k]], fg[sp[k + j]])];
+        s[j] = acc;
+    }
+
+    /* 段階2: S[j] = sum_{k=j+1..t} g_k * s[k-1-j]   (j = 0..t-1) */
+    for (int j = 0; j < t; j++) {
+        unsigned short acc = 0;
+        for (int k = j + 1; k <= t; k++)
+            acc ^= gf[mlt(fg[g[k]], fg[s[k - 1 - j]])];
+        S[j] = acc;
+    }
+}
+
 
 // Niederreiter暗号の公開鍵を作る
 vec pubkeygen(unsigned short permutation[N],
