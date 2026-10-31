@@ -1675,6 +1675,18 @@ static void matrix_horner(const vec *polynomial,
   }
 }
 
+void ogt(const unsigned short polynomial[K + 1],
+         unsigned short table[K][K])
+{
+    int i, j;
+
+    for (i = 0; i < K; i++)
+    {
+        for (j = 0; j < K - i; j++)
+            table[i][j + i] = polynomial[j];
+    }
+}
+
 int mkg(unsigned short matrix[N][K], vec *result)
 {
   OP w = {0};
@@ -1733,6 +1745,33 @@ int mkg(unsigned short matrix[N][K], vec *result)
 }
 
 
+vec synd_transform(vec f, unsigned short polynomial[K + 1])
+{
+    unsigned short table[K][K] = {0};
+    unsigned short original[K] = {0};
+    unsigned short result[K] = {0};
+
+    ogt(polynomial, table);
+
+    // 変換前のシンドロームを保存
+    for (int i = 0; i < K; i++)
+        original[i] = f.x[i];
+
+    // 行列とシンドロームの積
+    for (int i = 0; i < K; i++)
+    {
+        for (int j = 0; j < K; j++)
+        {
+            result[i] ^= gf[mlt(fg[table[i][j]], fg[original[j]])];
+        }
+    }
+
+    for (int i = 0; i < K; i++)
+        f.x[i] = result[i];
+
+    return f;
+}
+
 
 /*
  * BM用シンドローム sp[0..2t-1] から パターソン用 S(x) の係数 S[0..t-1] を作る。
@@ -1762,6 +1801,37 @@ void bm_to_patterson_syndrome(unsigned short *S, const unsigned short *sp, const
             acc ^= gf[mlt(fg[g[k]], fg[s[k - 1 - j]])];
         S[j] = acc;
     }
+}
+
+vec synd(unsigned short zz[],unsigned short mat[N][K])
+{
+  unsigned short syn[K] = {0};
+  unsigned short s = 0;
+  int i, j, t1;
+  vec f = {0};
+
+  printf("in synd2\n");
+
+  for (i = 0; i < K; i++)
+  {
+    syn[i] = 0;
+    s = 0;
+    // #pragma omp parallel num_threads(16)
+    for (j = 0; j < N; j++)
+    {
+      s ^= gf[mlt(fg[zz[j]], fg[mat[j][i]])];
+    }
+    syn[i] = s;
+    // printf ("syn%d,", syn[i]);
+  }
+  // printf ("\n");
+
+  f = o2v(setpol(syn, K));
+  printpol((f));
+  printf(" syn=============\n");
+  //  exit(1);
+
+  return f;
 }
 
 
