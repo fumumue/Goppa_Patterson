@@ -42,9 +42,9 @@ void gf2_identity(gf2 matrix[MATRIX_SIZE][MATRIX_SIZE]) {
 }
 
 // 行列式を計算する関数（GF(2)上では単純に対角線上の要素の積）
-unsigned short determinant(unsigned short matrix[F][F]) {
+unsigned short determinant(unsigned short matrix[MATRIX_SIZE][MATRIX_SIZE]) {
     unsigned short det = 1;
-    for (int i = 0; i < F; ++i) {
+    for (int i = 0; i < MATRIX_SIZE; ++i) {
         det = gf2_mul(det, matrix[i][i]); // 対角線上の要素の積
     }
     return det;
