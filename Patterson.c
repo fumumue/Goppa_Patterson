@@ -22,6 +22,7 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include <execinfo.h>
+#include <omp.h>
 
 // #include "8192.h"
 // #include "4096.h"
@@ -136,6 +137,47 @@ OP v2o(vec a)
 
   return f;
 }
+
+
+// 多項式の次数(default)
+int deg(vec a)
+{
+  int i, n = 0, flg = 0;
+
+  // #pragma omp parallel for
+  for (i = 0; i < DEG; i++)
+  {
+    if (a.x[i] > 0)
+    {
+      n = i;
+      flg = 1;
+    }
+  }
+  if (flg == 0)
+    return 0;
+
+  return n;
+}
+
+
+// 多項式の次数(degのOP型)
+int odeg(OP f)
+{
+  int i, j = 0, k;
+
+  if (f.t[0].a == 0)
+    return 0;
+
+  // k=terms(f);
+  for (i = 0; i < DEG; i++)
+  {
+    if (j < f.t[i].n && f.t[i].a > 0)
+      j = f.t[i].n;
+  }
+
+  return j;
+}
+
 
 OP v4x(vec a)
 {
@@ -1347,23 +1389,6 @@ int distance(OP f)
   return j;
 }
 
-// 多項式の次数(degのOP型)
-int odeg(OP f)
-{
-  int i, j = 0, k;
-
-  if (f.t[0].a == 0)
-    return 0;
-
-  // k=terms(f);
-  for (i = 0; i < DEG; i++)
-  {
-    if (j < f.t[i].n && f.t[i].a > 0)
-      j = f.t[i].n;
-  }
-
-  return j;
-}
 
 // ０多項式かどうかのチェック
 unsigned char
@@ -1603,25 +1628,6 @@ b2B(unsigned short b[E])
   return a;
 }
 
-// 多項式の次数(default)
-int deg(vec a)
-{
-  int i, n = 0, flg = 0;
-
-  // #pragma omp parallel for
-  for (i = 0; i < DEG; i++)
-  {
-    if (a.x[i] > 0)
-    {
-      n = i;
-      flg = 1;
-    }
-  }
-  if (flg == 0)
-    return 0;
-
-  return n;
-}
 
 // 整数からベクトル型への変換
 vec i2v(unsigned short n)
@@ -3752,7 +3758,7 @@ aa:
   l = -1;
   vec pp = {0}, tt = {0};
 
-  
+  /*
           while (l < 0)
           {
               for (i = 0; i < K; i++)
@@ -3768,7 +3774,7 @@ aa:
                   // exit(1);
               }
           }
-          //w = v2o(tt);
+  */        //w = v2o(tt);
   
  /*
   l = -1;
@@ -3787,9 +3793,9 @@ aa:
     //
   }
 */
-  // w = mkpol();
+   w = mkpol();
   
-  w = setpol(tt.x,K+1);
+  //w = setpol(tt.x,K+1);
 
   // 多項式の値が0でないことを確認
   for (i = 0; i < N; i++)
@@ -3799,7 +3805,8 @@ aa:
     {
       printf("trace 0 @ %d\n", i);
       // fail = 1;
-      exit(1);
+      goto aa;
+      //exit(1);
     }
   }
   for (i = 0; i < N; i++)
@@ -3839,8 +3846,8 @@ aa:
   */
 
   van();
-  for(int i=0;i<K;i++)
-  g[i]=tt.x[i];
+  //for(int i=0;i<K;i++)
+  //g[i]=tt.x[i];
   ogt();
   memset(mat, 0, sizeof(mat));
 
@@ -3871,7 +3878,7 @@ aa:
 
       for (k = 0; k < K; k++)
         s ^= gf[mlt(fg[gt[k][i]], fg[ma[j][k]])];
-      // printf("%d,",s);
+       printf("%d,",s);
       mat[j][i] = s;
     }
   }
@@ -4031,7 +4038,7 @@ OP pubkeygen()
       for (j = 0; j < (K)*E; j++)
         S.x[i][j] = xor128() % 2;
     }
-  } while (is_reg(S, inv_S.x) == -1);
+  } while (is_reg(S, &inv_S) == -1);
 
   /*
     fp = fopen("inv_S.key", "wb");
@@ -4439,7 +4446,7 @@ void mkerr(unsigned short *z1, int num)
   int i, j, l;
   j = 0;
 
-  while (j < num)
+  while (j < K)
   {
     l = xor128() % N;
     // printf ("l=%d\n", l);
@@ -4456,6 +4463,7 @@ void mkerr(unsigned short *z1, int num)
     if (z1[i] > 0)
       printf("%d=%d\n", i, z1[i]);
   }
+  //exit(1);
 }
 
 void fun()
@@ -4741,7 +4749,7 @@ int main(void)
 
     // エラーベクトルを生成する
     memset(z1, 0, sizeof(z1));
-    mkerr(z1, T * 2);
+    mkerr(z1, T*2);
     //for(int i=0;i<K;i++)
     //z1[i]=1;
 /*
@@ -4761,9 +4769,11 @@ int main(void)
 
     // 復号化の本体
     v = patterson(w, f);
-
+    ero2(v);
+    
     // エラー表示
-    if(ero2(v)<0){
+    //if(ero2(v)<0)
+    {
     for(int i=0;i<N;i++)
     if(z1[i]>0)
     printf("i=%d\n",i);
