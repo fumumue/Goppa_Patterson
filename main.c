@@ -136,7 +136,15 @@ int main(void)
   printpol(f);
   printf(" ==syndrome\n");
 
+//#define T 4                          /* 例: 訂正数 t */
 
+//gf g[T + 1];                         /* ゴッパ多項式の係数 g[0..T] */
+//gf sp[2 * T];                        /* BM用シンドローム (入力) */
+vec s={0};                             /* g型シンドローム (出力) */
+
+/* sp[j] = sum_i r_i * a_i^j / g(a_i)^2 を先に計算しておく */
+bm_to_patterson_syndrome(s.x, f.x, w.x, K);
+/* s[0..T-1] が g型シンドローム。次の段階へ渡す */
   unsigned short ya[N] = {0};
 
 //v = paloma(v2o(f), v2o(w));

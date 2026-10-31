@@ -60,6 +60,8 @@ vec vmul(vec a, vec b);
 vec fmul(vec a, vec b);
 OP oadd(OP f, OP g);
 OP omul(OP f, OP g);
+void bm_to_patterson_syndrome(unsigned short *S, const unsigned short *sp, const unsigned short *g, int t);
+
 
 int ero2(vec v, const unsigned short permutation[N],unsigned short *ya);
 int mkg(unsigned short matrix[N][K], vec *result);
