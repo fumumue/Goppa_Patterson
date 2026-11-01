@@ -150,8 +150,8 @@ vec s={0};                             /* g型シンドローム (出力) */
 
 unsigned short ya[N] = {0};
 
-//v = paloma(v2o(f), v2o(w));
- v = patterson(w, f);
+v = paloma(v2o(f), v2o(w));
+ //v = patterson(w, f);
 
 int reported = ero2(v, permutation, ya);   // ya に元の並びの誤りを書き込む
 

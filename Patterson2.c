@@ -1687,6 +1687,59 @@ void ogt(const unsigned short polynomial[K + 1],
     }
 }
 
+
+int is_squarefree(vec g)
+{
+    vec deriv = {0};
+    vec d;
+    vec gcd;
+
+    /* 標数2での形式微分 */
+    for (int i = 1; i < DEG; i += 2)
+        deriv.x[i - 1] = g.x[i];
+
+    d = deriv;
+
+    /* 微分がゼロなら、非定数 g は無平方ではない */
+    int zero = 1;
+    for (int i = 0; i < DEG; i++) {
+        if (d.x[i] != 0) {
+            zero = 0;
+            break;
+        }
+    }
+
+    if (zero)
+        return 0;
+    printf("b");
+    gcd = vgcd(g, d);
+
+int is_constant = 1;
+
+for (int i = 1; i < DEG; i++) {
+    if (gcd.x[i] != 0) {
+        is_constant = 0;
+        break;
+    }
+}
+
+if (is_constant && gcd.x[0] != 0) {
+    return 1;
+} else {
+    return 0;
+} 
+//exit(1);
+    /* GCD が非ゼロの定数多項式か調べる */
+    for (int i = 1; i < DEG; i++) {
+        if (gcd.x[i] != 0)
+            return 0;
+    }
+
+    return gcd.x[0] != 0;
+
+}
+
+
 int mkg(unsigned short matrix[N][K], vec *result)
 {
   OP w = {0};
@@ -1707,8 +1760,12 @@ int mkg(unsigned short matrix[N][K], vec *result)
     for (int i = 0; i < K; i++)
       pp.x[i] = rand() % N;
     pp.x[K] = 1;
-    w = setpol(pp.x, K + 1);
-    polynomial = o2v(w);
+    if (is_squarefree(pp)){
+        w = setpol(pp.x, K + 1);
+        polynomial = o2v(w);
+    } else{
+        continue;
+    }
 
     int has_root = 0; /* 試行ごとに0に戻す */
 #pragma omp parallel for schedule(static)
