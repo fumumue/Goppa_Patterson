@@ -114,7 +114,7 @@ int main(void)
     printf("configuration error! K is too big K\n");
     exit(1);
   }
-  gen_gf(E, N, 1);
+    gen_gf(E, N, 1);
 
   //for (int i = 0; i < N; i++)
   //  printf("%d %d\n", oinv(i), oinv2(i));

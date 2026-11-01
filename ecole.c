@@ -102,15 +102,15 @@ void gen_gf(int deg, int order, int opt_sage)
     /* build gf[] */
     gf[0] = 0;
     gf[1] = 1;
-    /*
+    
     for (int i = 2; i < order; i++)
     {
         gf[i] = (gf[i - 1] << 1); // gf[i] を更新する
         if (gf[i] >= order)       // gf[i] 検査
             gf[i] ^= x;
     }
-    */
-
+    
+/*
     unsigned short value = 1;
     for (int i = 2; i < order; i++)
     {
@@ -120,9 +120,11 @@ void gen_gf(int deg, int order, int opt_sage)
 
         gf[i] = value;
     }
+*/
     /* build fg[] */
-    for (int i = 0; i < order; i++)
+    for (int i = 0; i < N; i++)
         fg[gf[i]] = i;
+
 }
 
 void toFile(FILE *fp, int order, unsigned short *array, char *name)

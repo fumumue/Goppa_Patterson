@@ -1087,7 +1087,7 @@ static vec chen(vec f)
   return e;
 }
 
-vec vgcd(vec xx, vec yy)
+vec vgcd3(vec xx, vec yy)
 {
   vec tt = {0};
 
@@ -1113,6 +1113,34 @@ vec vgcd(vec xx, vec yy)
 
   return xx;
 }
+
+int is_zero_poly(vec p)
+{
+    for (int i = 0; i < DEG; i++)
+        if (p.x[i] != 0)
+            return 0;
+    return 1;
+}
+
+vec vgcd(vec xx, vec yy)
+{
+    vec tt = {0};
+
+    while (!is_zero_poly(yy))
+    {
+        tt = vmod(xx, yy);
+
+        // ここが重要: 何も減らないならおかしい
+        if (is_zero_poly(tt))
+            break;
+
+        xx = yy;
+        yy = tt;
+    }
+
+    return xx;
+}
+
 
 vec derivative(vec f)
 {
@@ -1691,8 +1719,10 @@ void ogt(const unsigned short polynomial[K + 1],
 int is_squarefree(vec g)
 {
     vec deriv = {0};
-    vec d;
-    vec gcd;
+    vec d={0};
+    vec gcd={0};
+
+    printf("ppppppppppppppppppppppppppppp");
 
     /* 標数2での形式微分 */
     for (int i = 1; i < DEG; i += 2)
@@ -1708,10 +1738,9 @@ int is_squarefree(vec g)
             break;
         }
     }
-
     if (zero)
         return 0;
-    printf("b");
+    printf("bっっっっっっっっっっっっっっっｂ");
     gcd = vgcd(g, d);
 
 int is_constant = 1;
@@ -1760,13 +1789,13 @@ int mkg(unsigned short matrix[N][K], vec *result)
     for (int i = 0; i < K; i++)
       pp.x[i] = rand() % N;
     pp.x[K] = 1;
-    if (is_squarefree(pp)){
+    if (!is_squarefree(pp))
+    {
         w = setpol(pp.x, K + 1);
         polynomial = o2v(w);
-    } else{
-        continue;
-    }
-
+    } 
+    
+    
     int has_root = 0; /* 試行ごとに0に戻す */
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < N; i++)
